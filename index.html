@@ -247,10 +247,12 @@
         try {
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             let firebaseConfig;
+            let isCanvasEnv = false;
 
             if (typeof __firebase_config !== 'undefined' && __firebase_config.startsWith('{')) {
                 firebaseConfig = JSON.parse(__firebase_config);
                 firebaseEnabled = true;
+                isCanvasEnv = true;
             } else if (userFirebaseConfig && userFirebaseConfig.apiKey && !userFirebaseConfig.apiKey.includes("PASTE")) {
                 firebaseConfig = userFirebaseConfig;
                 firebaseEnabled = true;
@@ -262,7 +264,6 @@
             db = getFirestore(app);
             auth = getAuth(app);
             
-            // Set listener before signing in
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     userId = user.uid;
@@ -275,13 +276,14 @@
                     userIdDisplay.textContent = "Not Signed In";
                 }
             });
-
-            // Attempt to sign in
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
+            
+            // Attempt sign-in after setting up the listener
+            if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                 await signInWithCustomToken(auth, __initial_auth_token);
             } else {
-                await signInAnonymously(auth);
+                 await signInAnonymously(auth);
             }
+
 
         } catch (e) {
             console.warn(e.message);
@@ -291,7 +293,6 @@
             loadLocalLog();
         }
     }
-
 
     // --- Gemini API Call ---
     async function getFoodDataFromImage(base64Image) {
@@ -420,54 +421,56 @@
         addBtn.disabled = true;
         addBtn.textContent = "Adding...";
         
-        let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats;
+        try {
+            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats;
 
-        if (currentScanResult.serving_unit === 'per piece') {
-            quantity = parseInt(quantityPieceInput.value);
-            unit = 'pcs';
-            if (isNaN(quantity) || quantity < 1) return;
-            finalCalories = currentScanResult.calories * quantity;
-            finalProtein = currentScanResult.protein * quantity;
-            finalCarbs = currentScanResult.carbs * quantity;
-            finalFats = currentScanResult.fats * quantity;
-        } else { // per 100g
-            quantity = parseInt(quantityGramInput.value);
-            unit = 'g';
-            if (isNaN(quantity) || quantity < 1) return;
-            const ratio = quantity / 100.0;
-            finalCalories = currentScanResult.calories * ratio;
-            finalProtein = currentScanResult.protein * ratio;
-            finalCarbs = currentScanResult.carbs * ratio;
-            finalFats = currentScanResult.fats * ratio;
+            if (currentScanResult.serving_unit === 'per piece') {
+                quantity = parseInt(quantityPieceInput.value);
+                unit = 'pcs';
+                if (isNaN(quantity) || quantity < 1) throw new Error("Invalid quantity");
+                finalCalories = currentScanResult.calories * quantity;
+                finalProtein = currentScanResult.protein * quantity;
+                finalCarbs = currentScanResult.carbs * quantity;
+                finalFats = currentScanResult.fats * quantity;
+            } else { // per 100g
+                quantity = parseInt(quantityGramInput.value);
+                unit = 'g';
+                if (isNaN(quantity) || quantity < 1) throw new Error("Invalid weight");
+                const ratio = quantity / 100.0;
+                finalCalories = currentScanResult.calories * ratio;
+                finalProtein = currentScanResult.protein * ratio;
+                finalCarbs = currentScanResult.carbs * ratio;
+                finalFats = currentScanResult.fats * ratio;
+            }
+
+            const logEntry = {
+                id: `local_${Date.now()}`,
+                name: currentScanResult.food_name,
+                quantity: quantity,
+                unit: unit,
+                calories: finalCalories,
+                protein: finalProtein,
+                carbs: finalCarbs,
+                fats: finalFats,
+                timestamp: new Date()
+            };
+
+            if (firebaseEnabled && userId) {
+                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/nutritionLog`), { ...logEntry, timestamp: serverTimestamp() });
+            } else {
+                localDailyLog.push(logEntry);
+                saveLocalLog();
+                updateLogUI(localDailyLog);
+            }
+
+            resultCard.classList.add('hidden');
+            currentScanResult = null;
+        } catch (e) {
+            console.error("Error in addToLog:", e);
+        } finally {
+            addBtn.disabled = false;
+            addBtn.textContent = "Add to Daily Log";
         }
-
-        const logEntry = {
-            id: `local_${Date.now()}`,
-            name: currentScanResult.food_name,
-            quantity: quantity,
-            unit: unit,
-            calories: finalCalories,
-            protein: finalProtein,
-            carbs: finalCarbs,
-            fats: finalFats,
-            timestamp: new Date()
-        };
-
-        if (firebaseEnabled && userId) {
-            try {
-                const logCollection = collection(db, `artifacts/${appId}/users/${userId}/nutritionLog`);
-                await addDoc(logCollection, { ...logEntry, timestamp: serverTimestamp() });
-            } catch (e) { console.error("Error adding document: ", e); }
-        } else {
-            localDailyLog.push(logEntry);
-            saveLocalLog();
-            updateLogUI(localDailyLog);
-        }
-
-        resultCard.classList.add('hidden');
-        currentScanResult = null;
-        addBtn.disabled = false;
-        addBtn.textContent = "Add to Daily Log";
     }
     
     async function deleteLogItem(docId) {
@@ -608,3 +611,4 @@
 </script>
 </body>
 </html>
+
