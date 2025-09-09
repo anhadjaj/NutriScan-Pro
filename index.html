@@ -232,7 +232,7 @@
             }
         } catch (e) {
             console.warn(e.message);
-            userIdDisplay.textContent = "Local Mode (Log is session-only)";
+            userIdDisplay.textContent = "Local Mode (Using Browser Storage)";
             scanBtn.disabled = false;
             resetBtn.disabled = false;
             loadLocalLog();
@@ -263,26 +263,8 @@
         });
     }
 
-    // --- Gemini API Call / Mock ---
+    // --- Gemini API Call ---
     async function getFoodDataFromImage(base64Image) {
-        // If not deployed (local mode), return a mock response for testing.
-        if (!firebaseEnabled) {
-            console.log("Using Mock API for local testing.");
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    resolve({
-                        food_name: "Apple (Mock)",
-                        quantity_estimation: 1,
-                        calories: 95,
-                        protein: 0.5,
-                        carbs: 25,
-                        fats: 0.3
-                    });
-                }, 1000);
-            });
-        }
-
-        // Deployed mode: Use the real Gemini API
         const apiKey = ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
