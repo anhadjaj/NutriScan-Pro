@@ -130,12 +130,20 @@
                             <div><p class="text-gray-400">Carbs</p><p id="carbs" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Fats</p><p id="fats" class="text-2xl font-bold"></p></div>
                         </div>
-                        <div class="flex items-center justify-center gap-4 mt-5">
-                            <label for="quantity" class="font-semibold">Quantity:</label>
+                        
+                        <div id="quantity-piece-controls" class="flex items-center justify-center gap-4 mt-5">
+                            <label for="quantity_piece" class="font-semibold">Quantity:</label>
                              <button id="qty-minus" class="styled-btn secondary-btn px-4 py-2 rounded-lg">-</button>
-                             <input type="number" id="quantity" value="1" min="1" class="w-20 bg-transparent border border-gray-600 rounded-lg text-center font-bold text-lg">
+                             <input type="number" id="quantity_piece" value="1" min="1" class="w-20 bg-transparent border border-gray-600 rounded-lg text-center font-bold text-lg">
                              <button id="qty-plus" class="styled-btn secondary-btn px-4 py-2 rounded-lg">+</button>
                         </div>
+
+                        <div id="quantity-gram-controls" class="flex items-center justify-center gap-4 mt-5 hidden">
+                            <label for="quantity_grams" class="font-semibold">Weight:</label>
+                             <input type="number" id="quantity_grams" value="100" min="1" class="w-24 bg-transparent border border-gray-600 rounded-lg text-center font-bold text-lg">
+                             <span class="font-semibold">grams</span>
+                        </div>
+
                         <button id="add-btn" class="styled-btn w-full mt-5">Add to Daily Log</button>
                     </div>
                 </div>
@@ -200,12 +208,15 @@
     const resultContent = document.getElementById('result-content');
     const logContainer = document.getElementById('log-container');
     const captureCanvas = document.getElementById('capture-canvas');
-    const quantityInput = document.getElementById('quantity');
+    const quantityPieceInput = document.getElementById('quantity_piece');
+    const quantityGramInput = document.getElementById('quantity_grams');
     const qtyMinusBtn = document.getElementById('qty-minus');
     const qtyPlusBtn = document.getElementById('qty-plus');
     const emptyLogMsg = document.getElementById('empty-log-msg');
     const userIdDisplay = document.getElementById('user-id-display');
     const servingSizeInfo = document.getElementById('serving-size-info');
+    const quantityPieceControls = document.getElementById('quantity-piece-controls');
+    const quantityGramControls = document.getElementById('quantity-gram-controls');
 
     // State Variables
     let currentScanResult = null;
@@ -344,7 +355,16 @@
             document.getElementById('protein').textContent = `${foodData.protein.toFixed(1)}g`;
             document.getElementById('carbs').textContent = `${foodData.carbs.toFixed(1)}g`;
             document.getElementById('fats').textContent = `${foodData.fats.toFixed(1)}g`;
-            quantityInput.value = foodData.quantity_estimation || 1;
+            
+            if (foodData.serving_unit === 'per piece') {
+                quantityPieceControls.classList.remove('hidden');
+                quantityGramControls.classList.add('hidden');
+                quantityPieceInput.value = foodData.quantity_estimation || 1;
+            } else {
+                quantityGramControls.classList.remove('hidden');
+                quantityPieceControls.classList.add('hidden');
+                quantityGramInput.value = 100;
+            }
             servingSizeInfo.textContent = `Nutritional values are ${foodData.serving_unit || 'per serving'}.`;
             resultContent.classList.remove('hidden');
         } else {
@@ -353,7 +373,9 @@
             document.getElementById('protein').textContent = '0g';
             document.getElementById('carbs').textContent = '0g';
             document.getElementById('fats').textContent = '0g';
-            quantityInput.value = 1;
+            quantityPieceControls.classList.remove('hidden');
+            quantityGramControls.classList.add('hidden');
+            quantityPieceInput.value = 1;
             servingSizeInfo.textContent = '';
             resultContent.classList.remove('hidden');
             currentScanResult = null;
@@ -366,20 +388,40 @@
     // --- Universal Log Functions ---
     async function addToLog() {
         if (!currentScanResult) return;
-        const quantity = parseInt(quantityInput.value);
-        if (isNaN(quantity) || quantity < 1) return;
         
         addBtn.disabled = true;
         addBtn.textContent = "Adding...";
+        
+        let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats;
+
+        if (currentScanResult.serving_unit === 'per piece') {
+            quantity = parseInt(quantityPieceInput.value);
+            unit = 'pcs';
+            if (isNaN(quantity) || quantity < 1) return;
+            finalCalories = currentScanResult.calories * quantity;
+            finalProtein = currentScanResult.protein * quantity;
+            finalCarbs = currentScanResult.carbs * quantity;
+            finalFats = currentScanResult.fats * quantity;
+        } else { // per 100g
+            quantity = parseInt(quantityGramInput.value);
+            unit = 'g';
+            if (isNaN(quantity) || quantity < 1) return;
+            const ratio = quantity / 100.0;
+            finalCalories = currentScanResult.calories * ratio;
+            finalProtein = currentScanResult.protein * ratio;
+            finalCarbs = currentScanResult.carbs * ratio;
+            finalFats = currentScanResult.fats * ratio;
+        }
 
         const logEntry = {
             id: `local_${Date.now()}`,
             name: currentScanResult.food_name,
             quantity: quantity,
-            calories: currentScanResult.calories * quantity,
-            protein: currentScanResult.protein * quantity,
-            carbs: currentScanResult.carbs * quantity,
-            fats: currentScanResult.fats * quantity,
+            unit: unit,
+            calories: finalCalories,
+            protein: finalProtein,
+            carbs: finalCarbs,
+            fats: finalFats,
             timestamp: new Date()
         };
 
@@ -492,13 +534,14 @@
             totalFats += item.fats;
             
             const itemTime = item.timestamp ? new Date(item.timestamp.seconds ? item.timestamp.seconds * 1000 : item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
+            const itemUnit = item.unit || 'pcs'; // Default to pcs for older items
 
             const logItem = document.createElement('div');
             logItem.className = 'grid grid-cols-2 sm:grid-cols-7 gap-2 text-sm py-2 border-b border-gray-700 items-center';
             logItem.innerHTML = `
                 <span class="col-span-2 sm:col-span-2 font-semibold capitalize">${item.name}</span>
                 <span class="text-center text-gray-400">${itemTime}</span>
-                <span class="text-center">${item.quantity}</span>
+                <span class="text-center">${item.quantity} ${itemUnit}</span>
                 <span class="text-right">${item.calories.toFixed(0)} kcal</span>
                 <span class="text-right">${item.protein.toFixed(1)} g</span>
                 <span class="text-right"><button data-id="${item.id}" class="delete-btn"><i class="fas fa-trash-alt"></i></button></span>
@@ -522,13 +565,13 @@
     resetBtn.addEventListener('click', resetDay);
     
     qtyMinusBtn.addEventListener('click', () => {
-        let currentQty = parseInt(quantityInput.value);
-        if (currentQty > 1) quantityInput.value = currentQty - 1;
+        let currentQty = parseInt(quantityPieceInput.value);
+        if (currentQty > 1) quantityPieceInput.value = currentQty - 1;
     });
 
     qtyPlusBtn.addEventListener('click', () => {
-        let currentQty = parseInt(quantityInput.value);
-        quantityInput.value = currentQty + 1;
+        let currentQty = parseInt(quantityPieceInput.value);
+        quantityPieceInput.value = currentQty + 1;
     });
     
     // --- Initialize App ---
