@@ -198,7 +198,7 @@
     import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // ---  FIREBASE CONFIGURATION ---
+    // --- YOUR FIREBASE AND GEMINI KEYS ---
     const userFirebaseConfig = {
       apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
       authDomain: "nutriscanpro-82216.firebaseapp.com",
@@ -208,12 +208,8 @@
       appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
       measurementId: "G-98QEXEX89S"
     };
-    // ----------------------------------------------------
-
-    // --- YOUR GEMINI API KEY ---
     const GEMINI_API_KEY = "AIzaSyDV-WvEe_yn-aLcSTnTsViGXN28tnTVHmA";
-    // ------------------------------------------------
-
+    // ------------------------------------
 
     // DOM Elements
     const videoElement = document.getElementById('webcam');
@@ -243,7 +239,7 @@
     let localDailyLog = [];
 
     // --- App Initialization ---
-    function initializeNutriScanApp() {
+    async function initializeNutriScanApp() {
         startCamera();
         scanBtn.disabled = true;
         resetBtn.disabled = true;
@@ -259,13 +255,33 @@
                 firebaseConfig = userFirebaseConfig;
                 firebaseEnabled = true;
             } else {
-                throw new Error("Firebase config not provided. Running in local mode.");
+                throw new Error("Firebase config not available. Running in local mode.");
             }
 
             const app = initializeFirebaseApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-            initializeAuthListener();
+            
+            // Set listener before signing in
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    userIdDisplay.textContent = `User ID: ${userId.substring(0, 8)}...`;
+                    scanBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    listenToLog();
+                } else {
+                    if (unsubscribeLog) unsubscribeLog();
+                    userIdDisplay.textContent = "Not Signed In";
+                }
+            });
+
+            // Attempt to sign in
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
 
         } catch (e) {
             console.warn(e.message);
@@ -276,29 +292,6 @@
         }
     }
 
-    function initializeAuthListener() {
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-                userIdDisplay.textContent = `User ID: ${userId.substring(0, 8)}...`;
-                scanBtn.disabled = false;
-                resetBtn.disabled = false;
-                listenToLog();
-            } else {
-                 if (unsubscribeLog) unsubscribeLog();
-                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("Sign in failed:", error);
-                    userIdDisplay.textContent = "Authentication Failed";
-                }
-            }
-        });
-    }
 
     // --- Gemini API Call ---
     async function getFoodDataFromImage(base64Image) {
