@@ -277,7 +277,6 @@
                 }
             });
             
-            // Attempt sign-in after setting up the listener
             if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                  await signInWithCustomToken(auth, __initial_auth_token);
             } else {
@@ -366,52 +365,56 @@
         loader.classList.remove('hidden');
         resultContent.classList.add('hidden');
 
-        captureCanvas.width = videoElement.videoWidth;
-        captureCanvas.height = videoElement.videoHeight;
-        const context = captureCanvas.getContext('2d');
-        context.drawImage(videoElement, 0, 0, captureCanvas.width, captureCanvas.height);
-        
-        const base64Image = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-        
-        const foodData = await getFoodDataFromImage(base64Image);
-        
-        loader.classList.add('hidden');
-
-        if (foodData && foodData.food_name !== "Unknown" && foodData.food_name !== "Error") {
-            currentScanResult = foodData;
-            document.getElementById('food-name').textContent = foodData.food_name;
-            document.getElementById('calories').textContent = foodData.calories.toFixed(0);
-            document.getElementById('protein').textContent = `${foodData.protein.toFixed(1)}g`;
-            document.getElementById('carbs').textContent = `${foodData.carbs.toFixed(1)}g`;
-            document.getElementById('fats').textContent = `${foodData.fats.toFixed(1)}g`;
+        try {
+            captureCanvas.width = videoElement.videoWidth;
+            captureCanvas.height = videoElement.videoHeight;
+            const context = captureCanvas.getContext('2d');
+            context.drawImage(videoElement, 0, 0, captureCanvas.width, captureCanvas.height);
             
-            if (foodData.serving_unit === 'per piece') {
+            const base64Image = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+            
+            const foodData = await getFoodDataFromImage(base64Image);
+            
+            loader.classList.add('hidden');
+
+            if (foodData && foodData.food_name !== "Unknown" && foodData.food_name !== "Error") {
+                currentScanResult = foodData;
+                document.getElementById('food-name').textContent = foodData.food_name;
+                document.getElementById('calories').textContent = foodData.calories.toFixed(0);
+                document.getElementById('protein').textContent = `${foodData.protein.toFixed(1)}g`;
+                document.getElementById('carbs').textContent = `${foodData.carbs.toFixed(1)}g`;
+                document.getElementById('fats').textContent = `${foodData.fats.toFixed(1)}g`;
+                
+                if (foodData.serving_unit === 'per piece') {
+                    quantityPieceControls.classList.remove('hidden');
+                    quantityGramControls.classList.add('hidden');
+                    quantityPieceInput.value = foodData.quantity_estimation || 1;
+                } else {
+                    quantityGramControls.classList.remove('hidden');
+                    quantityPieceControls.classList.add('hidden');
+                    quantityGramInput.value = 100;
+                }
+                servingSizeInfo.textContent = `Nutritional values are ${foodData.serving_unit || 'per serving'}.`;
+                resultContent.classList.remove('hidden');
+            } else {
+                document.getElementById('food-name').textContent = foodData.food_name === "Error" ? "Scan Error" : "Food not recognized";
+                document.getElementById('calories').textContent = '0';
+                document.getElementById('protein').textContent = '0g';
+                document.getElementById('carbs').textContent = '0g';
+                document.getElementById('fats').textContent = '0g';
                 quantityPieceControls.classList.remove('hidden');
                 quantityGramControls.classList.add('hidden');
-                quantityPieceInput.value = foodData.quantity_estimation || 1;
-            } else {
-                quantityGramControls.classList.remove('hidden');
-                quantityPieceControls.classList.add('hidden');
-                quantityGramInput.value = 100;
+                quantityPieceInput.value = 1;
+                servingSizeInfo.textContent = '';
+                resultContent.classList.remove('hidden');
+                currentScanResult = null;
             }
-            servingSizeInfo.textContent = `Nutritional values are ${foodData.serving_unit || 'per serving'}.`;
-            resultContent.classList.remove('hidden');
-        } else {
-            document.getElementById('food-name').textContent = foodData.food_name === "Error" ? "Scan Error" : "Food not recognized";
-            document.getElementById('calories').textContent = '0';
-            document.getElementById('protein').textContent = '0g';
-            document.getElementById('carbs').textContent = '0g';
-            document.getElementById('fats').textContent = '0g';
-            quantityPieceControls.classList.remove('hidden');
-            quantityGramControls.classList.add('hidden');
-            quantityPieceInput.value = 1;
-            servingSizeInfo.textContent = '';
-            resultContent.classList.remove('hidden');
-            currentScanResult = null;
+        } catch(e) {
+            console.error("Error during scan process:", e);
+        } finally {
+            scanBtn.disabled = false;
+            scanBtn.innerHTML = `<i class="fas fa-camera"></i><span>Scan Food</span>`;
         }
-        
-        scanBtn.disabled = false;
-        scanBtn.innerHTML = `<i class="fas fa-camera"></i><span>Scan Food</span>`;
     }
 
     // --- Universal Log Functions ---
@@ -427,7 +430,10 @@
             if (currentScanResult.serving_unit === 'per piece') {
                 quantity = parseInt(quantityPieceInput.value);
                 unit = 'pcs';
-                if (isNaN(quantity) || quantity < 1) throw new Error("Invalid quantity");
+                if (isNaN(quantity) || quantity < 1) {
+                     alert("Please enter a valid quantity.");
+                     throw new Error("Invalid quantity");
+                }
                 finalCalories = currentScanResult.calories * quantity;
                 finalProtein = currentScanResult.protein * quantity;
                 finalCarbs = currentScanResult.carbs * quantity;
@@ -435,7 +441,10 @@
             } else { // per 100g
                 quantity = parseInt(quantityGramInput.value);
                 unit = 'g';
-                if (isNaN(quantity) || quantity < 1) throw new Error("Invalid weight");
+                if (isNaN(quantity) || quantity < 1) {
+                    alert("Please enter a valid weight in grams.");
+                    throw new Error("Invalid weight");
+                }
                 const ratio = quantity / 100.0;
                 finalCalories = currentScanResult.calories * ratio;
                 finalProtein = currentScanResult.protein * ratio;
