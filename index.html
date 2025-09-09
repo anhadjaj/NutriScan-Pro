@@ -198,6 +198,21 @@
     import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+    // --- User's Firebase Configuration ---
+    const userFirebaseConfig = {
+      apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
+      authDomain: "nutriscanpro-82216.firebaseapp.com",
+      projectId: "nutriscanpro-82216",
+      storageBucket: "nutriscanpro-82216.appspot.com",
+      messagingSenderId: "637094147576",
+      appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
+      measurementId: "G-98QEXEX89S"
+    };
+
+    // --- User's Gemini API Key ---
+    const GEMINI_API_KEY = "AIzaSyDV-WvEe_yn-aLcSTnTsViGXN28tnTVHmA";
+
+
     // DOM Elements
     const videoElement = document.getElementById('webcam');
     const scanBtn = document.getElementById('scan-btn');
@@ -233,16 +248,23 @@
 
         try {
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            let firebaseConfig;
+
             if (typeof __firebase_config !== 'undefined' && __firebase_config.startsWith('{')) {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeFirebaseApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
+                firebaseConfig = JSON.parse(__firebase_config);
                 firebaseEnabled = true;
-                initializeAuthListener();
+            } else if (userFirebaseConfig && userFirebaseConfig.apiKey && !userFirebaseConfig.apiKey.includes("PASTE")) {
+                firebaseConfig = userFirebaseConfig;
+                firebaseEnabled = true;
             } else {
-                throw new Error("Firebase config not available. Running in local mode.");
+                throw new Error("Firebase config not provided. Running in local mode.");
             }
+
+            const app = initializeFirebaseApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            initializeAuthListener();
+
         } catch (e) {
             console.warn(e.message);
             userIdDisplay.textContent = "Local Mode (Using Browser Storage)";
@@ -278,7 +300,16 @@
 
     // --- Gemini API Call ---
     async function getFoodDataFromImage(base64Image) {
-        const apiKey = ""; 
+        let apiKey = GEMINI_API_KEY;
+        if (typeof __gemini_api_key__ !== 'undefined') {
+            apiKey = __gemini_api_key__; 
+        }
+        
+        if (!apiKey || apiKey.includes("PASTE")) {
+            alert("Gemini API Key is not configured. Please add your key to the script.");
+            return { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, serving_unit: 'N/A' };
+        }
+
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
             contents: [{ parts: [
@@ -312,7 +343,7 @@
         const videoConstraints = {
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            facingMode: 'environment' // Prioritize back camera
+            facingMode: 'environment'
         };
         try {
             let stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
@@ -320,7 +351,6 @@
         } catch (error) {
             console.warn("Could not get back camera, trying front camera.", error);
             try {
-                // Fallback to any camera if the back one fails
                 let stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 videoElement.srcObject = stream;
             } catch (fallbackError) {
