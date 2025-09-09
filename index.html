@@ -432,7 +432,7 @@
                 unit = 'pcs';
                 if (isNaN(quantity) || quantity < 1) {
                      alert("Please enter a valid quantity.");
-                     throw new Error("Invalid quantity");
+                     return; // Exit the function gracefully
                 }
                 finalCalories = currentScanResult.calories * quantity;
                 finalProtein = currentScanResult.protein * quantity;
@@ -443,7 +443,7 @@
                 unit = 'g';
                 if (isNaN(quantity) || quantity < 1) {
                     alert("Please enter a valid weight in grams.");
-                    throw new Error("Invalid weight");
+                    return; // Exit the function gracefully
                 }
                 const ratio = quantity / 100.0;
                 finalCalories = currentScanResult.calories * ratio;
