@@ -198,15 +198,22 @@
     import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // --- PASTE YOUR FIREBASE AND GEMINI KEYS HERE FOR DEPLOYMENT ---
+    // ---  FIREBASE CONFIGURATION ---
     const userFirebaseConfig = {
-      // apiKey: "AIza....",
-      // authDomain: "your-project.firebaseapp.com",
-      // projectId: "your-project-id",
-      // etc.
+      apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
+      authDomain: "nutriscanpro-82216.firebaseapp.com",
+      projectId: "nutriscanpro-82216",
+      storageBucket: "nutriscanpro-82216.appspot.com",
+      messagingSenderId: "637094147576",
+      appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
+      measurementId: "G-98QEXEX89S"
     };
-    const GEMINI_API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE";
-    // -----------------------------------------------------------
+    // ----------------------------------------------------
+
+    // --- YOUR GEMINI API KEY ---
+    const GEMINI_API_KEY = "AIzaSyDV-WvEe_yn-aLcSTnTsViGXN28tnTVHmA";
+    // ------------------------------------------------
+
 
     // DOM Elements
     const videoElement = document.getElementById('webcam');
@@ -297,9 +304,8 @@
     async function getFoodDataFromImage(base64Image) {
         let apiKey = "";
 
-        // Determine which API key to use
         if (typeof __gemini_api_key__ !== 'undefined' && __gemini_api_key__) {
-             apiKey = __gemini_api_key__; // Environment key takes precedence
+             apiKey = __gemini_api_key__;
         } else {
              apiKey = GEMINI_API_KEY;
         }
