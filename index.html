@@ -263,8 +263,26 @@
         });
     }
 
-    // --- Gemini API Call ---
+    // --- Gemini API Call / Mock ---
     async function getFoodDataFromImage(base64Image) {
+        // If not deployed (local mode), return a mock response for testing.
+        if (!firebaseEnabled) {
+            console.log("Using Mock API for local testing.");
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        food_name: "Apple (Mock)",
+                        quantity_estimation: 1,
+                        calories: 95,
+                        protein: 0.5,
+                        carbs: 25,
+                        fats: 0.3
+                    });
+                }, 1000);
+            });
+        }
+
+        // Deployed mode: Use the real Gemini API
         const apiKey = ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
@@ -296,11 +314,24 @@
 
     // --- Core Functions ---
     async function startCamera() {
+        const videoConstraints = {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'environment' // Prioritize back camera
+        };
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+            let stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
             videoElement.srcObject = stream;
         } catch (error) {
-            console.error("Error accessing webcam:", error);
+            console.warn("Could not get back camera, trying front camera.", error);
+            try {
+                // Fallback to any camera if the back one fails
+                let stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = stream;
+            } catch (fallbackError) {
+                console.error("Error accessing any webcam:", fallbackError);
+                 alert("Could not access any camera. Please ensure you have given permission.");
+            }
         }
     }
     
