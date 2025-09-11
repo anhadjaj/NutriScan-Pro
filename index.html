@@ -233,7 +233,7 @@
 
     // State Variables
     let currentScanResult = null;
-    let db, auth, userId, appId;
+    let db, auth, userId;
     let unsubscribeLog; 
     let firebaseEnabled = false;
     let localDailyLog = [];
@@ -245,7 +245,6 @@
         resetBtn.disabled = true;
 
         try {
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             let firebaseConfig;
             let isCanvasEnv = false;
 
@@ -257,7 +256,7 @@
                 firebaseConfig = userFirebaseConfig;
                 firebaseEnabled = true;
             } else {
-                throw new Error("Firebase config not available. Running in local mode.");
+                throw new Error("Firebase config not provided. Running in local mode.");
             }
 
             const app = initializeFirebaseApp(firebaseConfig);
@@ -432,7 +431,7 @@
                 unit = 'pcs';
                 if (isNaN(quantity) || quantity < 1) {
                      alert("Please enter a valid quantity.");
-                     return; // Exit the function gracefully
+                     throw new Error("Invalid quantity");
                 }
                 finalCalories = currentScanResult.calories * quantity;
                 finalProtein = currentScanResult.protein * quantity;
@@ -443,7 +442,7 @@
                 unit = 'g';
                 if (isNaN(quantity) || quantity < 1) {
                     alert("Please enter a valid weight in grams.");
-                    return; // Exit the function gracefully
+                    throw new Error("Invalid weight");
                 }
                 const ratio = quantity / 100.0;
                 finalCalories = currentScanResult.calories * ratio;
@@ -465,7 +464,7 @@
             };
 
             if (firebaseEnabled && userId) {
-                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/nutritionLog`), { ...logEntry, timestamp: serverTimestamp() });
+                await addDoc(collection(db, `users/${userId}/nutritionLog`), { ...logEntry, timestamp: serverTimestamp() });
             } else {
                 localDailyLog.push(logEntry);
                 saveLocalLog();
@@ -485,7 +484,7 @@
     async function deleteLogItem(docId) {
         if (firebaseEnabled && userId) {
             try {
-                await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/nutritionLog`, docId));
+                await deleteDoc(doc(db, `users/${userId}/nutritionLog`, docId));
             } catch (e) { console.error("Error deleting item:", e); }
         } else {
             localDailyLog = localDailyLog.filter(item => item.id !== docId);
@@ -503,7 +502,7 @@
                     const startOfToday = new Date();
                     startOfToday.setHours(0, 0, 0, 0);
                     const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
-                    const logCollection = collection(db, `artifacts/${appId}/users/${userId}/nutritionLog`);
+                    const logCollection = collection(db, `users/${userId}/nutritionLog`);
                     const q = query(logCollection, where("timestamp", ">=", startOfTodayTimestamp));
                     const snapshot = await getDocs(q);
                     const batch = writeBatch(db);
@@ -531,7 +530,7 @@
         startOfToday.setHours(0, 0, 0, 0);
         const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
 
-        const logCollection = collection(db, `artifacts/${appId}/users/${userId}/nutritionLog`);
+        const logCollection = collection(db, `users/${userId}/nutritionLog`);
         const q = query(logCollection, where("timestamp", ">=", startOfTodayTimestamp));
 
         unsubscribeLog = onSnapshot(q, (snapshot) => {
