@@ -133,9 +133,8 @@
                             <div><p class="text-gray-400">Protein</p><p id="protein" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Carbs</p><p id="carbs" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Fats</p><p id="fats" class="text-2xl font-bold"></p></div>
-                            <div><p class="text-gray-400">Sugar</p><p id="sugar" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-gray-400">Added Sugar</p><p id="added-sugar" class="text-2xl font-bold"></p></div>
                         </div>
-                        <p id="added-sugar-info" class="text-xs text-gray-400 text-center mt-2"></p>
                         
                         <!-- Recommendation Section -->
                         <div id="recommendation-section" class="mt-5 p-4 rounded-xl">
@@ -184,8 +183,8 @@
                         <p id="total-fats" class="text-3xl font-bold">0 g</p>
                     </div>
                      <div class="info-card p-4 text-center col-span-2 lg:col-span-1">
-                        <p class="text-gray-400">Total Sugar</p>
-                        <p id="total-sugar" class="text-3xl font-bold">0 g</p>
+                        <p class="text-gray-400">Total Added Sugar</p>
+                        <p id="total-added-sugar" class="text-3xl font-bold">0 g</p>
                     </div>
                 </div>
                 <div class="info-card p-5 flex-grow flex flex-col">
@@ -199,7 +198,7 @@
                         <span class="text-center">Qty</span>
                         <span class="text-right">Calories</span>
                         <span class="text-right">Protein</span>
-                        <span class="text-right">Sugar</span>
+                        <span class="text-right">Added Sugar</span>
                         <span class="text-right"></span>
                     </div>
                     <div id="log-container" class="flex-grow overflow-y-auto pr-2">
@@ -323,7 +322,7 @@
              apiKey = GEMINI_API_KEY;
         }
         
-        const fallbackResponse = { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, sugar: 0, added_sugars: "N/A", serving_unit: 'N/A', recommendation: "Neutral", reason: "Could not analyze the food item." };
+        const fallbackResponse = { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, added_sugar: 0, serving_unit: 'N/A', recommendation: "Neutral", reason: "Could not analyze the food item." };
 
         if (!apiKey || apiKey.includes("PASTE")) {
             showModal("API Key Error", "Gemini API Key is not configured. Please add your key to the script to enable scanning.");
@@ -333,12 +332,12 @@
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
             contents: [{ parts: [
-                { text: "Perform a deep search for the food item in the image, trying to identify brand and product names for accuracy. First, determine if the item is typically counted in pieces or measured by weight, and set 'serving_unit' to 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit, including calories, protein, carbs, fats, and total sugar. Crucially, provide the 'ADDED SUGARS' content as a string (e.g., '15g' or 'N/A'). Also, estimate the quantity of items. Based on its nutritional profile (especially added sugar and fats), provide a simple 'Yes' or 'No' recommendation on whether one should consume it as part of a healthy diet, and a brief, one-sentence reason. If you cannot identify a food item, respond with 'Unknown' for food_name and 0 for all nutritional values." },
+                { text: "Perform a deep search for the food item in the image, trying to identify brand and product names. Set 'serving_unit' to 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit, including calories, protein, carbs, fats, and crucially 'added_sugar' as a number. Also, estimate the quantity of items. Based on its nutritional profile (especially added sugar), provide a simple 'Yes' or 'No' recommendation and a brief, one-sentence reason. If you cannot identify a food item, respond with 'Unknown' for food_name and 0 for all nutritional values." },
                 { inlineData: { mimeType: "image/jpeg", data: base64Image } }
             ] }],
             generationConfig: {
                 responseMimeType: "application/json",
-                responseSchema: { type: "OBJECT", properties: { "food_name": { "type": "STRING" }, "quantity_estimation": { "type": "NUMBER" }, "calories": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "carbs": { "type": "NUMBER" }, "fats": { "type": "NUMBER" }, "sugar": { "type": "NUMBER" }, "added_sugars": { "type": "STRING" }, "serving_unit": { "type": "STRING" }, "recommendation": { "type": "STRING" }, "reason": { "type": "STRING" } }, required: ["food_name", "quantity_estimation", "calories", "protein", "carbs", "fats", "sugar", "added_sugars", "serving_unit", "recommendation", "reason"] }
+                responseSchema: { type: "OBJECT", properties: { "food_name": { "type": "STRING" }, "quantity_estimation": { "type": "NUMBER" }, "calories": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "carbs": { "type": "NUMBER" }, "fats": { "type": "NUMBER" }, "added_sugar": { "type": "NUMBER" }, "serving_unit": { "type": "STRING" }, "recommendation": { "type": "STRING" }, "reason": { "type": "STRING" } }, required: ["food_name", "quantity_estimation", "calories", "protein", "carbs", "fats", "added_sugar", "serving_unit", "recommendation", "reason"] }
             }
         };
 
@@ -407,10 +406,8 @@
                 document.getElementById('protein').textContent = `${(foodData.protein || 0).toFixed(1)}g`;
                 document.getElementById('carbs').textContent = `${(foodData.carbs || 0).toFixed(1)}g`;
                 document.getElementById('fats').textContent = `${(foodData.fats || 0).toFixed(1)}g`;
-                document.getElementById('sugar').textContent = `${(foodData.sugar || 0).toFixed(1)}g`;
+                document.getElementById('added-sugar').textContent = `${(foodData.added_sugar || 0).toFixed(1)}g`;
                 
-                document.getElementById('added-sugar-info').textContent = foodData.added_sugars !== 'N/A' ? `Includes ${foodData.added_sugars} of added sugars.` : '';
-
                 const recText = document.getElementById('recommendation-text');
                 const recReason = document.getElementById('recommendation-reason');
                 const recIcon = document.getElementById('recommendation-icon');
@@ -445,8 +442,7 @@
                 document.getElementById('protein').textContent = '0g';
                 document.getElementById('carbs').textContent = '0g';
                 document.getElementById('fats').textContent = '0g';
-                document.getElementById('sugar').textContent = '0g';
-                document.getElementById('added-sugar-info').textContent = '';
+                document.getElementById('added-sugar').textContent = '0g';
                 recommendationSection.style.background = 'transparent';
                 document.getElementById('recommendation-text').textContent = '';
                 document.getElementById('recommendation-reason').textContent = 'Could not analyze item.';
@@ -474,13 +470,13 @@
         addBtn.textContent = "Adding...";
         
         try {
-            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats, finalSugar;
+            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats, finalAddedSugar;
             
             const baseCalories = currentScanResult.calories || 0;
             const baseProtein = currentScanResult.protein || 0;
             const baseCarbs = currentScanResult.carbs || 0;
             const baseFats = currentScanResult.fats || 0;
-            const baseSugar = currentScanResult.sugar || 0;
+            const baseAddedSugar = currentScanResult.added_sugar || 0;
 
             if (currentScanResult.serving_unit === 'per piece') {
                 quantity = parseInt(quantityPieceInput.value);
@@ -493,7 +489,7 @@
                 finalProtein = baseProtein * quantity;
                 finalCarbs = baseCarbs * quantity;
                 finalFats = baseFats * quantity;
-                finalSugar = baseSugar * quantity;
+                finalAddedSugar = baseAddedSugar * quantity;
             } else { // per 100g
                 quantity = parseInt(quantityGramInput.value);
                 unit = 'g';
@@ -506,7 +502,7 @@
                 finalProtein = baseProtein * ratio;
                 finalCarbs = baseCarbs * ratio;
                 finalFats = baseFats * ratio;
-                finalSugar = baseSugar * ratio;
+                finalAddedSugar = baseAddedSugar * ratio;
             }
 
             const logEntry = {
@@ -518,7 +514,7 @@
                 protein: finalProtein,
                 carbs: finalCarbs,
                 fats: finalFats,
-                sugar: finalSugar,
+                added_sugar: finalAddedSugar,
                 timestamp: new Date()
             };
 
@@ -620,7 +616,7 @@
 
     // --- UI Update Function ---
     function updateLogUI(logData) {
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFats = 0, totalSugar = 0;
+        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFats = 0, totalAddedSugar = 0;
         logContainer.innerHTML = '';
         
         emptyLogMsg.classList.toggle('hidden', logData.length > 0);
@@ -630,7 +626,7 @@
             totalProtein += item.protein;
             totalCarbs += item.carbs;
             totalFats += item.fats;
-            totalSugar += item.sugar || 0;
+            totalAddedSugar += item.added_sugar || 0;
             
             const itemTime = item.timestamp ? new Date(item.timestamp.seconds ? item.timestamp.seconds * 1000 : item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
             const itemUnit = item.unit || 'pcs';
@@ -643,27 +639,17 @@
                 <span class="hidden sm:inline-block text-center">${item.quantity} ${itemUnit}</span>
                 <span class="hidden sm:inline-block text-right">${item.calories.toFixed(0)} kcal</span>
                 <span class="hidden sm:inline-block text-right">${item.protein.toFixed(1)} g</span>
-                <span class="hidden sm:inline-block text-right">${(item.sugar || 0).toFixed(1)} g</span>
+                <span class="hidden sm:inline-block text-right">${(item.added_sugar || 0).toFixed(1)} g</span>
                 <span class="text-right"><button data-id="${item.id}" class="delete-btn"><i class="fas fa-trash-alt"></i></button></span>
             `;
-            
-            // Add event listener directly to the button on the new element before appending.
-            logItem.querySelector('.delete-btn').addEventListener('click', () => deleteLogItem(item.id));
-            
             logContainer.appendChild(logItem);
         });
-        
-        /* This old method of attaching listeners is less reliable and has been replaced.
-        logContainer.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteLogItem(btn.dataset.id));
-        });
-        */
 
         document.getElementById('total-calories').textContent = totalCalories.toFixed(0);
         document.getElementById('total-protein').textContent = `${totalProtein.toFixed(1)} g`;
         document.getElementById('total-carbs').textContent = `${totalCarbs.toFixed(1)} g`;
         document.getElementById('total-fats').textContent = `${totalFats.toFixed(1)} g`;
-        document.getElementById('total-sugar').textContent = `${totalSugar.toFixed(1)} g`;
+        document.getElementById('total-added-sugar').textContent = `${totalAddedSugar.toFixed(1)} g`;
     }
 
     // --- Custom Modal (replaces alert/confirm) ---
@@ -712,6 +698,14 @@
     addBtn.addEventListener('click', addToLog);
     resetBtn.addEventListener('click', resetDay);
     
+    // Use event delegation for delete buttons
+    logContainer.addEventListener('click', (event) => {
+        const deleteButton = event.target.closest('.delete-btn');
+        if (deleteButton && deleteButton.dataset.id) {
+            deleteLogItem(deleteButton.dataset.id);
+        }
+    });
+
     qtyMinusBtn.addEventListener('click', () => {
         let currentQty = parseInt(quantityPieceInput.value);
         if (currentQty > 1) quantityPieceInput.value = currentQty - 1;
@@ -728,5 +722,4 @@
 </script>
 </body>
 </html>
-
 
