@@ -183,7 +183,7 @@
                         <p class="text-gray-400">Total Fats</p>
                         <p id="total-fats" class="text-3xl font-bold">0 g</p>
                     </div>
-                     <div class="info-card p-4 text-center lg:col-span-1">
+                     <div class="info-card p-4 text-center col-span-2 lg:col-span-1">
                         <p class="text-gray-400">Total Sugar</p>
                         <p id="total-sugar" class="text-3xl font-bold">0 g</p>
                     </div>
@@ -404,11 +404,11 @@
             if (foodData && foodData.food_name !== "Unknown" && foodData.food_name !== "Error") {
                 currentScanResult = foodData;
                 document.getElementById('food-name').textContent = foodData.food_name;
-                document.getElementById('calories').textContent = foodData.calories.toFixed(0);
-                document.getElementById('protein').textContent = `${foodData.protein.toFixed(1)}g`;
-                document.getElementById('carbs').textContent = `${foodData.carbs.toFixed(1)}g`;
-                document.getElementById('fats').textContent = `${foodData.fats.toFixed(1)}g`;
-                document.getElementById('sugar').textContent = `${foodData.sugar.toFixed(1)}g`;
+                document.getElementById('calories').textContent = (foodData.calories || 0).toFixed(0);
+                document.getElementById('protein').textContent = `${(foodData.protein || 0).toFixed(1)}g`;
+                document.getElementById('carbs').textContent = `${(foodData.carbs || 0).toFixed(1)}g`;
+                document.getElementById('fats').textContent = `${(foodData.fats || 0).toFixed(1)}g`;
+                document.getElementById('sugar').textContent = `${(foodData.sugar || 0).toFixed(1)}g`;
                 
                 document.getElementById('added-sugar-info').textContent = foodData.added_sugars !== 'N/A' ? `Includes ${foodData.added_sugars} of added sugars.` : '';
 
@@ -479,6 +479,13 @@
         try {
             let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats, finalSugar;
 
+            // **FIX**: Default nutritional values to 0 if they are not provided by the API
+            const baseCalories = currentScanResult.calories || 0;
+            const baseProtein = currentScanResult.protein || 0;
+            const baseCarbs = currentScanResult.carbs || 0;
+            const baseFats = currentScanResult.fats || 0;
+            const baseSugar = currentScanResult.sugar || 0;
+
             if (currentScanResult.serving_unit === 'per piece') {
                 quantity = parseInt(quantityPieceInput.value);
                 unit = 'pcs';
@@ -486,12 +493,11 @@
                      alert("Please enter a valid quantity.");
                      return; 
                 }
-                const ratio = quantity;
-                finalCalories = currentScanResult.calories * ratio;
-                finalProtein = currentScanResult.protein * ratio;
-                finalCarbs = currentScanResult.carbs * ratio;
-                finalFats = currentScanResult.fats * ratio;
-                finalSugar = currentScanResult.sugar * ratio;
+                finalCalories = baseCalories * quantity;
+                finalProtein = baseProtein * quantity;
+                finalCarbs = baseCarbs * quantity;
+                finalFats = baseFats * quantity;
+                finalSugar = baseSugar * quantity;
             } else { // per 100g
                 quantity = parseInt(quantityGramInput.value);
                 unit = 'g';
@@ -500,11 +506,11 @@
                     return;
                 }
                 const ratio = quantity / 100.0;
-                finalCalories = currentScanResult.calories * ratio;
-                finalProtein = currentScanResult.protein * ratio;
-                finalCarbs = currentScanResult.carbs * ratio;
-                finalFats = currentScanResult.fats * ratio;
-                finalSugar = currentScanResult.sugar * ratio;
+                finalCalories = baseCalories * ratio;
+                finalProtein = baseProtein * ratio;
+                finalCarbs = baseCarbs * ratio;
+                finalFats = baseFats * ratio;
+                finalSugar = baseSugar * ratio;
             }
 
             const logEntry = {
@@ -679,3 +685,4 @@
 </script>
 </body>
 </html>
+
