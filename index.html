@@ -48,7 +48,7 @@
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 6px 20px rgba(0, 170, 255, 0.4);
         }
-         .styled-btn:disabled {
+       .styled-btn:disabled {
             background-color: #4A5568;
             cursor: not-allowed;
             transform: none;
@@ -124,11 +124,22 @@
                     <div id="result-content">
                         <h3 class="text-xl font-bold text-white">Identified: <span id="food-name" class="text-primary-color"></span></h3>
                         <p id="serving-size-info" class="text-xs text-gray-400 text-center -mt-1 mb-2"></p>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-center">
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-4 text-center">
                             <div><p class="text-gray-400">Calories</p><p id="calories" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Protein</p><p id="protein" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Carbs</p><p id="carbs" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Fats</p><p id="fats" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-gray-400">Added Sugar</p><p id="added-sugar" class="text-2xl font-bold"></p></div>
+                        </div>
+                        
+                        <div class="mt-5 border-t border-gray-700 pt-4">
+                             <div class="flex justify-between items-center text-lg">
+                                 <p class="font-semibold">Recommendation:</p>
+                                 <p id="recommendation" class="font-bold text-primary-color"></p>
+                             </div>
+                             <div class="mt-1">
+                                 <p class="text-sm text-gray-400 text-center"><span id="reason"></span></p>
+                             </div>
                         </div>
                         
                         <div id="quantity-piece-controls" class="flex items-center justify-center gap-4 mt-5">
@@ -151,10 +162,14 @@
 
             <!-- Right Column: Totals and Log -->
             <div class="flex flex-col gap-6">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     <div class="info-card p-4 text-center">
                         <p class="text-gray-400">Total Calories</p>
                         <p id="total-calories" class="text-3xl font-bold">0</p>
+                    </div>
+                     <div class="info-card p-4 text-center">
+                        <p class="text-gray-400">Total Added Sugar</p>
+                        <p id="total-added-sugar" class="text-3xl font-bold">0 g</p>
                     </div>
                     <div class="info-card p-4 text-center">
                         <p class="text-gray-400">Total Protein</p>
@@ -174,12 +189,13 @@
                         <h3 class="text-xl font-bold text-white">Today's Log</h3>
                         <div id="user-id-display" class="text-xs text-gray-500">Initializing...</div>
                     </div>
-                    <div class="hidden sm:grid grid-cols-7 gap-2 text-xs font-semibold text-gray-400 border-b border-gray-700 pb-2 mb-2">
+                    <div class="hidden sm:grid grid-cols-8 gap-2 text-xs font-semibold text-gray-400 border-b border-gray-700 pb-2 mb-2">
                         <span class="col-span-2">Food</span>
                         <span class="text-center">Time</span>
                         <span class="text-center">Qty</span>
                         <span class="text-right">Calories</span>
                         <span class="text-right">Protein</span>
+                        <span class="text-right">Sugar</span>
                         <span class="text-right"></span>
                     </div>
                     <div id="log-container" class="flex-grow overflow-y-auto pr-2">
@@ -302,20 +318,24 @@
              apiKey = GEMINI_API_KEY;
         }
         
+        const defaultErrorResponse = { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, added_sugar: 0, serving_unit: 'N/A', recommendation: 'N/A', reason: 'An error occurred during scan.' };
+
         if (!apiKey || apiKey.includes("PASTE")) {
-            alert("Gemini API Key is not configured. Please add your key to the script.");
-            return { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, serving_unit: 'N/A' };
+            // Using a custom message box instead of alert
+            showModal("API Key Error", "Gemini API Key is not configured. Please add your key to the script to enable scanning.");
+            return defaultErrorResponse;
         }
+
 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
             contents: [{ parts: [
-                { text: "Identify the primary food item(s) in this image. First, determine if the item is typically counted in pieces (like fruits, nuts, eggs) or measured by weight (like rice, curry, soup). Based on this, set the 'serving_unit' to either 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit. Also, estimate the quantity of items if there are multiple. If you cannot identify a food item, respond with 'Unknown' for food_name, 0 for all nutritional values, 1 for quantity, and 'N/A' for serving_unit. Provide an integer for the quantity estimation." },
+                { text: "Identify the primary food item in this image. First, determine if the item is typically counted in pieces (like fruits, cookies) or measured by weight (like rice, curry). Set 'serving_unit' to 'per piece' or 'per 100g' accordingly. Provide a nutritional estimate for that single serving, including 'added_sugar'. Also estimate the quantity of items if multiple are visible. Finally, give a simple one-word 'Yes' or 'No' recommendation on if it's generally healthy, and a brief, one-line 'reason'. If unidentified, use 'Unknown' and 0 for values." },
                 { inlineData: { mimeType: "image/jpeg", data: base64Image } }
             ] }],
             generationConfig: {
                 responseMimeType: "application/json",
-                responseSchema: { type: "OBJECT", properties: { "food_name": { "type": "STRING" }, "quantity_estimation": { "type": "NUMBER" }, "calories": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "carbs": { "type": "NUMBER" }, "fats": { "type": "NUMBER" }, "serving_unit": { "type": "STRING" } }, required: ["food_name", "quantity_estimation", "calories", "protein", "carbs", "fats", "serving_unit"] }
+                responseSchema: { type: "OBJECT", properties: { "food_name": { "type": "STRING" }, "quantity_estimation": { "type": "NUMBER" }, "calories": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "carbs": { "type": "NUMBER" }, "fats": { "type": "NUMBER" }, "added_sugar": { "type": "NUMBER" }, "serving_unit": { "type": "STRING" }, "recommendation": { "type": "STRING" }, "reason": { "type": "STRING" } }, required: ["food_name", "quantity_estimation", "calories", "protein", "carbs", "fats", "added_sugar", "serving_unit", "recommendation", "reason"] }
             }
         };
 
@@ -330,7 +350,7 @@
             return JSON.parse(jsonText);
         } catch (error) {
             console.error("Gemini API Error:", error);
-            return { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, serving_unit: 'N/A' };
+            return defaultErrorResponse;
         }
     }
 
@@ -352,7 +372,8 @@
                 videoElement.srcObject = stream;
             } catch (fallbackError) {
                 console.error("Error accessing any webcam:", fallbackError);
-                 alert("Could not access any camera. Please ensure you have given permission.");
+                 // Using a custom message box instead of alert
+                showModal("Camera Error", "Could not access any camera. Please ensure you have given permission in your browser settings and try again.");
             }
         }
     }
@@ -383,6 +404,9 @@
                 document.getElementById('protein').textContent = `${foodData.protein.toFixed(1)}g`;
                 document.getElementById('carbs').textContent = `${foodData.carbs.toFixed(1)}g`;
                 document.getElementById('fats').textContent = `${foodData.fats.toFixed(1)}g`;
+                document.getElementById('added-sugar').textContent = `${foodData.added_sugar.toFixed(1)}g`;
+                document.getElementById('recommendation').textContent = foodData.recommendation;
+                document.getElementById('reason').textContent = foodData.reason;
                 
                 if (foodData.serving_unit === 'per piece') {
                     quantityPieceControls.classList.remove('hidden');
@@ -401,6 +425,9 @@
                 document.getElementById('protein').textContent = '0g';
                 document.getElementById('carbs').textContent = '0g';
                 document.getElementById('fats').textContent = '0g';
+                document.getElementById('added-sugar').textContent = '0g';
+                document.getElementById('recommendation').textContent = 'N/A';
+                document.getElementById('reason').textContent = foodData.reason || 'Could not identify the food item.';
                 quantityPieceControls.classList.remove('hidden');
                 quantityGramControls.classList.add('hidden');
                 quantityPieceInput.value = 1;
@@ -424,24 +451,25 @@
         addBtn.textContent = "Adding...";
         
         try {
-            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats;
+            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats, finalAddedSugar;
 
             if (currentScanResult.serving_unit === 'per piece') {
                 quantity = parseInt(quantityPieceInput.value);
                 unit = 'pcs';
                 if (isNaN(quantity) || quantity < 1) {
-                     alert("Please enter a valid quantity.");
-                     throw new Error("Invalid quantity");
+                    showModal("Invalid Input", "Please enter a valid quantity.");
+                    throw new Error("Invalid quantity");
                 }
                 finalCalories = currentScanResult.calories * quantity;
                 finalProtein = currentScanResult.protein * quantity;
                 finalCarbs = currentScanResult.carbs * quantity;
                 finalFats = currentScanResult.fats * quantity;
+                finalAddedSugar = currentScanResult.added_sugar * quantity;
             } else { // per 100g
                 quantity = parseInt(quantityGramInput.value);
                 unit = 'g';
                 if (isNaN(quantity) || quantity < 1) {
-                    alert("Please enter a valid weight in grams.");
+                    showModal("Invalid Input", "Please enter a valid weight in grams.");
                     throw new Error("Invalid weight");
                 }
                 const ratio = quantity / 100.0;
@@ -449,6 +477,7 @@
                 finalProtein = currentScanResult.protein * ratio;
                 finalCarbs = currentScanResult.carbs * ratio;
                 finalFats = currentScanResult.fats * ratio;
+                finalAddedSugar = currentScanResult.added_sugar * ratio;
             }
 
             const logEntry = {
@@ -460,6 +489,7 @@
                 protein: finalProtein,
                 carbs: finalCarbs,
                 fats: finalFats,
+                added_sugar: finalAddedSugar,
                 timestamp: new Date()
             };
 
@@ -494,7 +524,8 @@
     }
     
     async function resetDay() {
-        if (confirm("Are you sure you want to reset your log for today? This cannot be undone.")) {
+        // Replace confirm with a custom modal
+        showModal("Confirm Reset", "Are you sure you want to reset your log for today? This cannot be undone.", true, async () => {
             if (firebaseEnabled && userId) {
                 resetBtn.disabled = true;
                 resetBtn.textContent = "Resetting...";
@@ -518,7 +549,7 @@
                 saveLocalLog();
                 updateLogUI(localDailyLog);
             }
-        }
+        });
     }
 
     // --- Firestore-Specific Functions ---
@@ -561,7 +592,7 @@
 
     // --- UI Update Function ---
     function updateLogUI(logData) {
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFats = 0;
+        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFats = 0, totalAddedSugar = 0;
         logContainer.innerHTML = '';
         
         emptyLogMsg.classList.toggle('hidden', logData.length > 0);
@@ -571,18 +602,20 @@
             totalProtein += item.protein;
             totalCarbs += item.carbs;
             totalFats += item.fats;
+            totalAddedSugar += item.added_sugar || 0; // handle older items without this field
             
             const itemTime = item.timestamp ? new Date(item.timestamp.seconds ? item.timestamp.seconds * 1000 : item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
-            const itemUnit = item.unit || 'pcs'; // Default to pcs for older items
+            const itemUnit = item.unit || 'pcs'; 
 
             const logItem = document.createElement('div');
-            logItem.className = 'grid grid-cols-2 sm:grid-cols-7 gap-2 text-sm py-2 border-b border-gray-700 items-center';
+            logItem.className = 'grid grid-cols-3 sm:grid-cols-8 gap-2 text-sm py-2 border-b border-gray-700 items-center';
             logItem.innerHTML = `
-                <span class="col-span-2 sm:col-span-2 font-semibold capitalize">${item.name}</span>
-                <span class="text-center text-gray-400">${itemTime}</span>
-                <span class="text-center">${item.quantity} ${itemUnit}</span>
-                <span class="text-right">${item.calories.toFixed(0)} kcal</span>
-                <span class="text-right">${item.protein.toFixed(1)} g</span>
+                <span class="col-span-3 sm:col-span-2 font-semibold capitalize">${item.name}</span>
+                <span class="hidden sm:inline-block text-center text-gray-400">${itemTime}</span>
+                <span class="hidden sm:inline-block text-center">${item.quantity} ${itemUnit}</span>
+                <span class="hidden sm:inline-block text-right">${item.calories.toFixed(0)} kcal</span>
+                <span class="hidden sm:inline-block text-right">${item.protein.toFixed(1)} g</span>
+                <span class="hidden sm:inline-block text-right">${(item.added_sugar || 0).toFixed(1)} g</span>
                 <span class="text-right"><button data-id="${item.id}" class="delete-btn"><i class="fas fa-trash-alt"></i></button></span>
             `;
             logContainer.appendChild(logItem);
@@ -596,7 +629,49 @@
         document.getElementById('total-protein').textContent = `${totalProtein.toFixed(1)} g`;
         document.getElementById('total-carbs').textContent = `${totalCarbs.toFixed(1)} g`;
         document.getElementById('total-fats').textContent = `${totalFats.toFixed(1)} g`;
+        document.getElementById('total-added-sugar').textContent = `${totalAddedSugar.toFixed(1)} g`;
     }
+    
+    // --- Custom Modal (replaces alert/confirm) ---
+    function showModal(title, message, showConfirm = false, confirmCallback = () => {}) {
+        let existingModal = document.getElementById('custom-modal');
+        if(existingModal) existingModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'custom-modal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50';
+        modal.innerHTML = `
+            <div class="info-card p-6 w-full max-w-sm text-center">
+                <h3 class="text-xl font-bold mb-3">${title}</h3>
+                <p class="text-gray-300 mb-6">${message}</p>
+                <div id="modal-buttons" class="flex gap-4 justify-center">
+                    <button id="modal-ok-btn" class="styled-btn">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const okBtn = document.getElementById('modal-ok-btn');
+        const modalButtons = document.getElementById('modal-buttons');
+
+        if(showConfirm) {
+            okBtn.textContent = 'Confirm';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.id = 'modal-cancel-btn';
+            cancelBtn.className = 'styled-btn secondary-btn';
+            cancelBtn.textContent = 'Cancel';
+            modalButtons.appendChild(cancelBtn);
+            
+            okBtn.addEventListener('click', () => {
+                confirmCallback();
+                modal.remove();
+            });
+            cancelBtn.addEventListener('click', () => modal.remove());
+        } else {
+             okBtn.addEventListener('click', () => modal.remove());
+        }
+    }
+
 
     // --- Event Listeners ---
     scanBtn.addEventListener('click', scanFood);
