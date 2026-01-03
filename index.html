@@ -313,51 +313,81 @@
 
     // --- Gemini API Call ---
     async function getFoodDataFromImage(base64Image) {
-        let apiKey = "";
+    const apiKey = GEMINI_API_KEY;
 
-        if (typeof __gemini_api_key__ !== 'undefined' && __gemini_api_key__) {
-             apiKey = __gemini_api_key__;
-        } else {
-             apiKey = GEMINI_API_KEY;
-        }
-        
-        const fallbackResponse = { food_name: "Error", quantity_estimation: 1, calories: 0, protein: 0, carbs: 0, fats: 0, added_sugar: 0, serving_unit: 'N/A', recommendation: "Neutral", reason: "Could not analyze the food item." };
+    const fallbackResponse = {
+        food_name: "Error",
+        quantity_estimation: 1,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+        added_sugar: 0,
+        serving_unit: "N/A",
+        recommendation: "No",
+        reason: "Could not analyze the food item."
+    };
 
-        if (!apiKey || apiKey.includes("PASTE")) {
-            showModal("API Key Error", "Gemini API Key is not configured. Please add your key to the script to enable scanning.");
-            return fallbackResponse;
-        }
+    if (!apiKey) return fallbackResponse;
 
-        // --- FIXED: Updated Model to gemini-1.5-flash-002 (Numbered version is safer) ---
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key=${apiKey}`;
-        
-        const payload = {
-            contents: [{ parts: [
-                { text: "Perform a deep search for the food item in the image, trying to identify brand and product names. Set 'serving_unit' to 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit, including calories, protein, carbs, fats, and crucially 'added_sugar' as a number. Also, estimate the quantity of items. Based on its nutritional profile (especially added sugar), provide a simple 'Yes' or 'No' recommendation and a brief, one-sentence reason. If you cannot identify a food item, respond with 'Unknown' for food_name and 0 for all nutritional values." },
-                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
-            ] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: { type: "OBJECT", properties: { "food_name": { "type": "STRING" }, "quantity_estimation": { "type": "NUMBER" }, "calories": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "carbs": { "type": "NUMBER" }, "fats": { "type": "NUMBER" }, "added_sugar": { "type": "NUMBER" }, "serving_unit": { "type": "STRING" }, "recommendation": { "type": "STRING" }, "reason": { "type": "STRING" } }, required: ["food_name", "quantity_estimation", "calories", "protein", "carbs", "fats", "added_sugar", "serving_unit", "recommendation", "reason"] }
+    // ✅ CORRECT endpoint + model
+    const apiUrl =
+        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const payload = {
+        contents: [{
+            parts: [
+                {
+                    text: `
+            Identify the food item in the image.
+            Return JSON only with:
+            food_name,
+            quantity_estimation,
+            calories,
+            protein,
+            carbs,
+            fats,
+            added_sugar,
+            serving_unit ("per piece" or "per 100g"),
+            recommendation ("Yes" or "No"),
+            reason (short explanation)
+            `
+                            },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg",
+                                    data: base64Image
+                                }
+                            }
+                        ]
+                    }]
+                };
+            
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+            
+                    if (!response.ok) {
+                        throw new Error(`Gemini failed: ${response.status}`);
+                    }
+            
+                    const result = await response.json();
+            
+                    const text =
+                        result.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+                    if (!text) throw new Error("Empty Gemini response");
+            
+                    return JSON.parse(text.replace(/```json|```/g, "").trim());
+            
+                } catch (err) {
+                    console.error("Gemini API Error:", err);
+                    return fallbackResponse;
+                }
             }
-        };
-
-        try {
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error(`API call failed: ${response.status}`);
-            const result = await response.json();
-            if (!result.candidates || !result.candidates[0].content.parts[0].text) {
-                throw new Error("Invalid API response structure");
-            }
-            let jsonText = result.candidates[0].content.parts[0].text;
-            jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(jsonText);
-        } catch (error)
-        {
-            console.error("Gemini API Error:", error);
-            return fallbackResponse;
-        }
-    }
 
 
     // --- Core Functions ---
