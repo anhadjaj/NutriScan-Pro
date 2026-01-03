@@ -224,7 +224,8 @@
       appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
       measurementId: "G-98QEXEX89S"
     };
-    // UPDATED KEY PROVIDED BY USER:
+    
+    // YOUR API KEY
     const GEMINI_API_KEY = "AIzaSyASi1wwXIwEA11MInw7dty6QUxDa8sED8I";
     // ------------------------------------
 
@@ -327,8 +328,8 @@
             return fallbackResponse;
         }
 
-        // UPDATE: Changed to 'gemini-1.5-flash-latest' to fix the 404 error
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        // --- FIXED: Updated Model to gemini-1.5-flash-002 (Numbered version is safer) ---
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key=${apiKey}`;
         
         const payload = {
             contents: [{ parts: [
