@@ -111,7 +111,6 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left Column: Camera and Results -->
             <div class="flex flex-col gap-6">
                 <div class="info-card aspect-video flex items-center justify-center overflow-hidden">
                     <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
@@ -136,7 +135,6 @@
                             <div><p class="text-gray-400">Added Sugar</p><p id="added-sugar" class="text-2xl font-bold"></p></div>
                         </div>
                         
-                        <!-- Recommendation Section -->
                         <div id="recommendation-section" class="mt-5 p-4 rounded-xl">
                             <h4 class="font-bold text-lg mb-1 flex items-center gap-2">
                                 <span id="recommendation-icon"></span>
@@ -163,7 +161,6 @@
                 </div>
             </div>
 
-            <!-- Right Column: Totals and Log -->
             <div class="flex flex-col gap-6">
                 <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="info-card p-4 text-center">
@@ -227,7 +224,8 @@
       appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
       measurementId: "G-98QEXEX89S"
     };
-    const GEMINI_API_KEY = "AIzaSyDV-WvEe_yn-aLcSTnTsViGXN28tnTVHmA";
+    // UPDATED KEY PROVIDED BY USER:
+    const GEMINI_API_KEY = "AIzaSyASi1wwXIwEA11MInw7dty6QUxDa8sED8I";
     // ------------------------------------
 
     // DOM Elements
@@ -329,7 +327,9 @@
             return fallbackResponse;
         }
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // UPDATE: Changed to 'gemini-1.5-flash-latest' to fix the 404 error
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        
         const payload = {
             contents: [{ parts: [
                 { text: "Perform a deep search for the food item in the image, trying to identify brand and product names. Set 'serving_unit' to 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit, including calories, protein, carbs, fats, and crucially 'added_sugar' as a number. Also, estimate the quantity of items. Based on its nutritional profile (especially added sugar), provide a simple 'Yes' or 'No' recommendation and a brief, one-sentence reason. If you cannot identify a food item, respond with 'Unknown' for food_name and 0 for all nutritional values." },
@@ -723,4 +723,3 @@
 </script>
 </body>
 </html>
-
