@@ -329,7 +329,7 @@
             return fallbackResponse;
         }
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         const payload = {
             contents: [{ parts: [
                 { text: "Perform a deep search for the food item in the image, trying to identify brand and product names. Set 'serving_unit' to 'per piece' or 'per 100g'. Provide a nutritional estimate for that single serving unit, including calories, protein, carbs, fats, and crucially 'added_sugar' as a number. Also, estimate the quantity of items. Based on its nutritional profile (especially added sugar), provide a simple 'Yes' or 'No' recommendation and a brief, one-sentence reason. If you cannot identify a food item, respond with 'Unknown' for food_name and 0 for all nutritional values." },
@@ -348,7 +348,8 @@
             if (!result.candidates || !result.candidates[0].content.parts[0].text) {
                 throw new Error("Invalid API response structure");
             }
-            const jsonText = result.candidates[0].content.parts[0].text;
+            let jsonText = result.candidates[0].content.parts[0].text;
+            jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
             return JSON.parse(jsonText);
         } catch (error)
         {
