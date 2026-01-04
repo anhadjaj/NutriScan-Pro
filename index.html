@@ -167,7 +167,7 @@
                     </button>
                 </div>
                 <div class="text-center text-xs text-gray-400">
-                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 30cm (1ft) from food.
+                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 100cm from food.
                 </div>
 
                 <div id="result-card" class="info-card p-5 hidden">
@@ -439,6 +439,9 @@
                 - Calculate the approximate VOLUME in cm³ or ml.
                 - Estimate the DENSITY of this specific food.
                 - Calculate the WEIGHT (Volume * Density).
+                - If you think it's a glass or a bowl and you predicted the liquid inside predict the volume based on the type of liquid as you can fetch the density.
+                - If you think it's solids then predict the approximate grams present in that volume.
+                - Also look at the amount of liquid or solid in the container/glass to predict the actual eatable or drinkable in the container/glass and not the dimension of the object.
     
                 OUTPUT:
                 Return a JSON object with:
