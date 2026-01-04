@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NutriScan Pro - Hybrid 3D</title>
+    <title>NutriScan Pro - AR 3D Volumetric</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -292,7 +292,7 @@
         
         // --- CONSTANTS ---
         let currentDistanceCm = 30; // Default fallback
-        const TARGET_SIDE_ANGLE = 65; 
+        const TARGET_SIDE_ANGLE = 65; // FIXED: 65 degrees
         const STABLE_THRESHOLD = 8; 
         const STABLE_DURATION = 800; 
     
@@ -324,6 +324,7 @@
         let db, auth, userId;
         let scanState = 'IDLE'; 
         let images = { top: null, side: null };
+        let distances = { top: 30, side: 30 }; // FIXED: Separate distances
         let stabilityTimer = null;
         let isStable = false;
         let currentScanResult = null;
@@ -352,18 +353,11 @@
             const buttons = document.querySelectorAll('.dist-btn');
             buttons.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // Visual feedback
                     buttons.forEach(b => b.classList.remove('active'));
                     e.currentTarget.classList.add('active');
-                    
-                    // Logic Update
                     currentDistanceCm = parseInt(e.currentTarget.dataset.dist);
                     console.log(`Manual Distance set to ${currentDistanceCm}cm`);
-                    
-                    // Note: If AR was running, we assume user overrides it
-                    if (xrSession) {
-                        endARSession(); // Helper to cleanly exit AR if they click manual
-                    }
+                    if (xrSession) endARSession(); 
                 });
             });
         }
@@ -374,37 +368,27 @@
                 alert("AR not supported on this browser. Please use the Manual Distance buttons below.");
                 return;
             }
-
             const isArSupported = await navigator.xr.isSessionSupported('immersive-ar');
             if (!isArSupported) {
-                alert("AR mode not available on this device. Please select distance manually.");
+                alert("AR mode not available. Please select distance manually.");
                 return;
             }
-
             try {
                 xrSession = await navigator.xr.requestSession('immersive-ar', {
                     requiredFeatures: ['local', 'hit-test'],
                     optionalFeatures: ['dom-overlay'],
                     domOverlay: { root: document.body }
                 });
-
-                xrSession.addEventListener('end', () => {
-                    endARSession();
-                });
-
+                xrSession.addEventListener('end', () => { endARSession(); });
                 xrRefSpace = await xrSession.requestReferenceSpace('local');
                 const viewerSpace = await xrSession.requestReferenceSpace('viewer');
                 xrHitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
 
-                // UI Updates: HIDE Manual, SHOW AR Panel
                 arStartBtn.classList.add('hidden');
-                manualControls.classList.add('opacity-50', 'pointer-events-none'); // Disable manual
+                manualControls.classList.add('opacity-50', 'pointer-events-none');
                 manualHint.textContent = "AR Active. Distance set automatically.";
                 arPanel.classList.remove('hidden');
-
-                // Start Loop
                 xrSession.requestAnimationFrame(onXRFrame);
-
             } catch (e) {
                 console.error("AR Error:", e);
                 alert("AR Error. Please use manual distance buttons.");
@@ -416,7 +400,6 @@
                 xrSession.end().catch(() => {});
                 xrSession = null;
             }
-            // Restore Manual UI
             arPanel.classList.add('hidden');
             arStartBtn.classList.remove('hidden');
             manualControls.classList.remove('opacity-50', 'pointer-events-none');
@@ -426,28 +409,20 @@
         function onXRFrame(time, frame) {
             const session = frame.session;
             session.requestAnimationFrame(onXRFrame);
-
             const hitTestResults = frame.getHitTestResults(xrHitTestSource);
-
             if (hitTestResults.length > 0) {
                 const hit = hitTestResults[0];
                 const pose = hit.getPose(xrRefSpace);
                 const viewerPose = frame.getViewerPose(xrRefSpace);
-
                 if (viewerPose) {
                     const camPos = viewerPose.transform.position;
                     const hitPos = pose.transform.position;
-
-                    // Calculate Euclidean Distance (Meters)
                     const distanceMeters = Math.sqrt(
                         Math.pow(hitPos.x - camPos.x, 2) +
                         Math.pow(hitPos.y - camPos.y, 2) +
                         Math.pow(hitPos.z - camPos.z, 2)
                     );
-
                     const distanceCm = Math.round(distanceMeters * 100);
-                    
-                    // Update UI & Global Variable
                     arDistDisplay.textContent = distanceCm;
                     currentDistanceCm = distanceCm; 
                 }
@@ -470,14 +445,12 @@
     
         function requestSensorPermission() {
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                            sensorBtn.classList.add('hidden');
-                        }
-                    })
-                    .catch(console.error);
+                DeviceOrientationEvent.requestPermission().then(permissionState => {
+                    if (permissionState === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        sensorBtn.classList.add('hidden');
+                    }
+                }).catch(console.error);
             }
         }
     
@@ -495,7 +468,6 @@
     
             const beta = event.beta; 
             const gamma = event.gamma; 
-    
             const maxTilt = 20; 
             const xOffset = Math.max(-100, Math.min(100, (gamma / maxTilt) * 100));
             
@@ -545,10 +517,18 @@
     
             if (scanState === 'TOP_VIEW') {
                 images.top = base64;
+                distances.top = currentDistanceCm; // SAVE TOP DISTANCE
                 scanState = 'SIDE_VIEW';
                 updateGuidance();
             } else if (scanState === 'SIDE_VIEW') {
                 images.side = base64;
+                distances.side = currentDistanceCm; // SAVE SIDE DISTANCE
+                
+                // *** FIX: FORCE AR TO CLOSE NOW TO ENABLE SCROLLING ***
+                if (xrSession) {
+                    endARSession();
+                }
+
                 scanState = 'PROCESSING';
                 levelOverlay.classList.add('hidden');
                 processScan();
@@ -561,14 +541,14 @@
                 instructionText.textContent = "Hold phone FLAT above food (Top View)";
                 instructionIcon.className = "fas fa-arrow-down text-2xl mb-1 block";
             } else {
-                instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~65°)";
-                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-45"; 
+                instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~65°)"; 
+                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-12"; 
             }
             isStable = false;
             bubble.classList.remove('aligned');
         }
     
-        // --- GEMINI PROCESSING ---
+        // --- GEMINI PROCESSING (FIXED CLEANING LOGIC) ---
         async function processScan() {
             scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analyzing...`;
             resultCard.classList.remove('hidden');
@@ -579,37 +559,35 @@
                 const promptText = `
                 You are an expert nutritionist and geometry analyst. 
                 I have provided TWO images of the same food item:
-                1. TOP VIEW (looking straight down).
-                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees).
+                1. TOP VIEW (looking straight down). Distance: ${distances.top} cm.
+                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees). Distance: ${distances.side} cm.
     
                 GEOMETRIC CONTEXT:
-                - The camera distance was ${xrSession ? 'detected by AR' : 'selected manually'} as: ${currentDistanceCm} cm.
+                - Use the specific distance for each view to estimate scale accurately.
                 - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt).
                 
                 TASKS:
-                - NOTE: if it's a solid food return in grams, if it's liquid return in ml.
-                - Identify the shape (sphere, cylinder, cuboid, irregular).
-                - Estimate dimensions (L, W, H) in cm.
-                - Calculate VOLUME in cm³.
-                - Estimate DENSITY (g/cm³) based on food type.
-                - Calculate WEIGHT (Volume * Density).
-                - If container (glass/bowl), detect fill level.
+                1. IDENTIFY CONTENT TYPE: Is it a Liquid (water, juice, soup, coffee) or a Solid food?
+                2. IF LIQUID: Ignore container height. Detect fill line. Calculate volume of content only. Unit: 'ml'.
+                3. IF SOLID: Estimate physical volume. Unit: 'cm³'.
+                4. CALCULATE Weight (Volume * Estimated Density).
     
-                OUTPUT JSON:
+                OUTPUT JSON ONLY (No markdown formatting):
                 {
                     "food_name": "String",
                     "shape": "String",
-                    "dimensions": { "L": number, "W": number, "H": number },
-                    "volume_cm3": number,
-                    "density_g_cm3": number,
+                    "volume_value": number,
+                    "volume_unit": "ml" or "cm3", 
                     "calculated_weight_g": number,
+                    "density_g_cm3": number,
                     "calories": number,
                     "protein": number,
                     "carbs": number,
                     "fats": number,
                     "added_sugar": number,
                     "recommendation": "Yes/No",
-                    "reason": "String"
+                    "reason": "String",
+                    "dimensions": { "L": number, "W": number, "H": number }
                 }
                 `;
     
@@ -628,16 +606,24 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
     
-                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errData.error?.message || 'Unknown'}`);
+                }
     
                 const data = await response.json();
-                const result = JSON.parse(data.candidates[0].content.parts[0].text);
+                
+                // *** FIX: CLEAN THE JSON STRING ***
+                let rawText = data.candidates[0].content.parts[0].text;
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                const result = JSON.parse(rawText);
                 
                 displayResults(result);
     
             } catch (e) {
-                console.error(e);
-                alert("Analysis failed. Please try scanning again.");
+                console.error("Full Error:", e);
+                alert(`Analysis failed: ${e.message}`);
                 scanState = 'IDLE';
             } finally {
                 scanBtn.disabled = false;
@@ -651,14 +637,16 @@
             currentScanResult = data;
     
             document.getElementById('food-name').textContent = data.food_name;
-            document.getElementById('calc-method').textContent = `Volumetric: ~${data.volume_cm3}cm³ @ ${data.dimensions.H}cm height`;
+            // Updated Method Display with dynamic unit
+            document.getElementById('calc-method').textContent = `Volume: ~${data.volume_value}${data.volume_unit} (Density Est.)`;
             
             console.group("NutriScan 3D Geometry Log");
-            console.log(`User Distance: ${currentDistanceCm} cm`);
+            console.log(`Distances: Top=${distances.top}, Side=${distances.side}`);
+            console.log(`Volume: ${data.volume_value} ${data.volume_unit}`);
             console.log(`Weight: ${data.calculated_weight_g} g`);
             console.groupEnd();
             
-            document.getElementById('geo-data').textContent = `${data.shape} (${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H}cm) -> ${data.calculated_weight_g}g`;
+            document.getElementById('geo-data').textContent = `Shape: ${data.shape} | Vol: ${data.volume_value}${data.volume_unit} -> ${data.calculated_weight_g}g`;
     
             document.getElementById('calories').textContent = data.calories;
             document.getElementById('protein').textContent = data.protein + "g";
@@ -681,7 +669,6 @@
             document.getElementById('recommendation-reason').textContent = data.reason;
         }
     
-        // --- LOGGING ---
         async function addToLog() {
             if (!currentScanResult) return;
             const entry = {
@@ -689,6 +676,8 @@
                 name: currentScanResult.food_name,
                 quantity: currentScanResult.calculated_weight_g,
                 unit: 'g',
+                volume: currentScanResult.volume_value, // New field for volume
+                volume_unit: currentScanResult.volume_unit, // New field for unit
                 calories: currentScanResult.calories,
                 protein: currentScanResult.protein,
                 carbs: currentScanResult.carbs,
@@ -709,35 +698,23 @@
             resultCard.classList.add('hidden');
         }
     
-        // --- LISTEN TO LOG ---
         function listenToLog() {
             if (!userId) return;
-            
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
-            
-            const q = query(
-                collection(db, `users/${userId}/nutritionLog`), 
-                where("timestamp", ">=", Timestamp.fromDate(startOfToday))
-            );
-    
+            const q = query(collection(db, `users/${userId}/nutritionLog`), where("timestamp", ">=", Timestamp.fromDate(startOfToday)));
             onSnapshot(q, (snapshot) => {
                 const dailyLog = [];
-                snapshot.forEach(doc => {
-                    dailyLog.push(doc.data());
-                });
+                snapshot.forEach(doc => dailyLog.push(doc.data()));
                 updateLogUI(dailyLog);
             });
         }
     
-        // --- RESET LOG ---
         async function resetDay() {
             if(!confirm("Are you sure you want to reset today's log?")) return;
-    
             if (userId) {
                 const startOfToday = new Date();
                 startOfToday.setHours(0, 0, 0, 0);
-                
                 const q = query(collection(db, `users/${userId}/nutritionLog`), where("timestamp", ">=", Timestamp.fromDate(startOfToday)));
                 const snapshot = await getDocs(q);
                 const batch = writeBatch(db);
@@ -768,7 +745,12 @@
                 totals.carb += item.carbs;
                 const div = document.createElement('div');
                 div.className = "flex justify-between items-center border-b border-gray-700 py-2 text-sm";
-                div.innerHTML = `<span>${item.name} (${Math.round(item.quantity)}g)</span><span>${item.calories} kcal</span>`;
+                // Show volume if liquid
+                const val = item.volume_unit === 'ml' ? item.volume : item.quantity;
+                const unit = item.volume_unit === 'ml' ? 'ml' : 'g';
+                const qtyDisplay = `${Math.round(val || 0)}${unit}`;
+                
+                div.innerHTML = `<span>${item.name} (${qtyDisplay})</span><span>${item.calories} kcal</span>`;
                 logContainer.appendChild(div);
             });
             document.getElementById('total-calories').textContent = Math.round(totals.cal);
