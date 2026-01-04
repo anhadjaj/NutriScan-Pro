@@ -249,7 +249,7 @@
     <script type="module">
         import { initializeApp as initializeFirebaseApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, writeBatch, query, where, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, writeBatch, query, where, getDocs, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     
         const userFirebaseConfig = {
           apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
@@ -265,19 +265,17 @@
         const GEMINI_API_KEY = "AIzaSyDTyTYwHZbF3P_psG2NW8t2Fj1GyJmBdhQ";
         
         // --- CONSTANTS ---
-        // NEW: We use a variable for distance, not a constant
         let currentDistanceCm = 30; 
-        
-        // NEW: Comfortable Side View Angle (65 degrees instead of 90)
         const TARGET_SIDE_ANGLE = 65; 
-        const STABLE_THRESHOLD = 8; // Slightly looser threshold for ease
-        const STABLE_DURATION = 800; // Faster capture
+        const STABLE_THRESHOLD = 8; 
+        const STABLE_DURATION = 800; 
     
         // DOM Elements
         const videoElement = document.getElementById('webcam');
         const scanBtn = document.getElementById('scan-btn');
         const sensorBtn = document.getElementById('sensor-btn');
         const addBtn = document.getElementById('add-btn');
+        const resetBtn = document.getElementById('reset-btn'); // Fixed: Added resetBtn
         const resultCard = document.getElementById('result-card');
         const loader = document.getElementById('loader');
         const resultContent = document.getElementById('result-content');
@@ -310,17 +308,13 @@
             }
             setupDistanceButtons();
         }
-
-        // --- NEW: Distance Selector Logic ---
+    
         function setupDistanceButtons() {
             const buttons = document.querySelectorAll('.dist-btn');
             buttons.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // Update UI
                     buttons.forEach(b => b.classList.remove('active'));
                     e.currentTarget.classList.add('active');
-                    
-                    // Update Logic
                     currentDistanceCm = parseInt(e.currentTarget.dataset.dist);
                     console.log(`Distance set to ${currentDistanceCm}cm`);
                 });
@@ -363,37 +357,29 @@
             updateGuidance();
         }
     
-        // --- UPDATED ORIENTATION LOGIC ---
         function handleOrientation(event) {
             if (scanState === 'IDLE' || scanState === 'PROCESSING') return;
     
-            const beta = event.beta; // Front/Back tilt
-            const gamma = event.gamma; // Left/Right tilt
+            const beta = event.beta; 
+            const gamma = event.gamma; 
     
-            // Visual Bubble Logic (Simplified mapping)
             const maxTilt = 20; 
             const xOffset = Math.max(-100, Math.min(100, (gamma / maxTilt) * 100));
             
-            // Calculate deviation based on state
             let deviation = 0;
             let yOffset = 0;
-
+    
             if (scanState === 'TOP_VIEW') {
-                // Target: 0 (Flat)
                 deviation = Math.sqrt(beta*beta + gamma*gamma);
                 yOffset = Math.max(-100, Math.min(100, (beta / maxTilt) * 100));
             } else {
-                // Target: ~65 degrees (Comfortable Angle)
-                // If beta is 65, deviation is 0.
                 const betaDiff = beta - TARGET_SIDE_ANGLE; 
                 deviation = Math.sqrt((betaDiff*betaDiff) + (gamma*gamma));
                 yOffset = Math.max(-100, Math.min(100, (betaDiff / maxTilt) * 100));
             }
-
-            // Move Bubble
+    
             bubble.style.transform = `translate(${xOffset * 3}px, ${yOffset * 3}px)`;
     
-            // Stability Check
             if (Math.abs(deviation) < STABLE_THRESHOLD) {
                 if (!isStable) {
                     isStable = true;
@@ -442,15 +428,14 @@
                 instructionText.textContent = "Hold phone FLAT above food (Top View)";
                 instructionIcon.className = "fas fa-arrow-down text-2xl mb-1 block";
             } else {
-                // NEW INSTRUCTION TEXT
                 instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~65°)";
-                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-45"; // Rotate icon visually
+                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-45"; 
             }
             isStable = false;
             bubble.classList.remove('aligned');
         }
     
-        // --- GEMINI PROCESSING (UPDATED PROMPT) ---
+        // --- GEMINI PROCESSING ---
         async function processScan() {
             scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analyzing...`;
             resultCard.classList.remove('hidden');
@@ -458,25 +443,24 @@
             resultContent.classList.add('hidden');
     
             try {
-                // NEW PROMPT HANDLING DYNAMIC DISTANCE AND ANGLE
                 const promptText = `
                 You are an expert nutritionist and geometry analyst. 
                 I have provided TWO images of the same food item:
                 1. TOP VIEW (looking straight down).
-                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees, NOT a perfect side profile).
+                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees).
     
                 GEOMETRIC CONTEXT:
                 - The camera distance was selected by the user as: ${currentDistanceCm} cm. Use this for scale.
-                - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt), so vertical lines will foreshorten.
+                - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt).
                 
                 TASKS:
                 - NOTE: if it's a solid food return in grams, if it's liquid return in ml.
                 - Identify the shape (sphere, cylinder, cuboid, irregular).
-                - Estimate dimensions (L, W, H) in cm using the ${currentDistanceCm}cm distance as a reference.
+                - Estimate dimensions (L, W, H) in cm.
                 - Calculate VOLUME in cm³.
                 - Estimate DENSITY (g/cm³) based on food type.
                 - Calculate WEIGHT (Volume * Density).
-                - If it's a container (glass/bowl), detect the fill level to estimate actual content volume.
+                - If container (glass/bowl), detect fill level.
     
                 OUTPUT JSON:
                 {
@@ -507,7 +491,6 @@
                     generationConfig: { responseMimeType: "application/json" }
                 };
     
-                // Using 2.5-flash as confirmed
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
@@ -539,8 +522,6 @@
             
             console.group("NutriScan 3D Geometry Log");
             console.log(`User Distance: ${currentDistanceCm} cm`);
-            console.log(`Shape: ${data.shape}`);
-            console.log(`Dim: ${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H}`);
             console.log(`Weight: ${data.calculated_weight_g} g`);
             console.groupEnd();
             
@@ -580,12 +561,13 @@
                 carbs: currentScanResult.carbs,
                 fats: currentScanResult.fats,
                 added_sugar: currentScanResult.added_sugar,
-                timestamp: new Date()
+                timestamp: new Date() // Will use serverTimestamp for Firebase
             };
             
             if (userId) {
                 try {
                     await addDoc(collection(db, `users/${userId}/nutritionLog`), { ...entry, timestamp: serverTimestamp() });
+                    console.log("Added to Firebase");
                 } catch(e) { console.error("Firebase Add Error", e); }
             } else {
                 localDailyLog.push(entry);
@@ -594,12 +576,55 @@
             resultCard.classList.add('hidden');
         }
     
+        // --- NEW: LISTEN TO LOG (FIXES THE UI NOT UPDATING) ---
+        function listenToLog() {
+            if (!userId) return;
+            
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            
+            const q = query(
+                collection(db, `users/${userId}/nutritionLog`), 
+                where("timestamp", ">=", Timestamp.fromDate(startOfToday))
+            );
+    
+            onSnapshot(q, (snapshot) => {
+                const dailyLog = [];
+                snapshot.forEach(doc => {
+                    dailyLog.push(doc.data());
+                });
+                updateLogUI(dailyLog);
+            });
+        }
+    
+        // --- NEW: RESET LOG (FIXES THE BROKEN RESET BUTTON) ---
+        async function resetDay() {
+            if(!confirm("Are you sure you want to reset today's log?")) return;
+    
+            if (userId) {
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+                
+                const q = query(collection(db, `users/${userId}/nutritionLog`), where("timestamp", ">=", Timestamp.fromDate(startOfToday)));
+                const snapshot = await getDocs(q);
+                const batch = writeBatch(db);
+                snapshot.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            } else {
+                localDailyLog = [];
+                updateLogUI(localDailyLog);
+            }
+        }
+    
         function updateLogUI(logData) {
             logContainer.innerHTML = '';
             let totals = { cal: 0, pro: 0, carb: 0 };
             
             if(logData.length === 0) {
                 document.getElementById('empty-log-msg').classList.remove('hidden');
+                document.getElementById('total-calories').textContent = "0";
+                document.getElementById('total-protein').textContent = "0 g";
+                document.getElementById('total-carbs').textContent = "0 g";
                 return;
             }
             document.getElementById('empty-log-msg').classList.add('hidden');
@@ -627,6 +652,7 @@
                     if(u) {
                         userId = u.uid;
                         document.getElementById('user-id-display').textContent = "ID: " + u.uid.substring(0,6);
+                        listenToLog(); // <--- This triggers the UI update from Firebase
                     }
                 });
                 signInAnonymously(auth);
@@ -636,6 +662,7 @@
         scanBtn.addEventListener('click', start3DScan);
         sensorBtn.addEventListener('click', requestSensorPermission);
         addBtn.addEventListener('click', addToLog);
+        resetBtn.addEventListener('click', resetDay);
         
         initializeNutriScanApp();
     
