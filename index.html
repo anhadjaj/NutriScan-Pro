@@ -167,7 +167,7 @@
                     </button>
                 </div>
                 <div class="text-center text-xs text-gray-400">
-                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 100cm from food.
+                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 30cm (1ft) from food.
                 </div>
 
                 <div id="result-card" class="info-card p-5 hidden">
@@ -254,7 +254,7 @@
         const GEMINI_API_KEY = "AIzaSyDTyTYwHZbF3P_psG2NW8t2Fj1GyJmBdhQ";
         
         // --- CONSTANTS FOR GEOMETRY ---
-        const ESTIMATED_DISTANCE_CM = 100; // 30cm / 1ft standard
+        const ESTIMATED_DISTANCE_CM = 30; // 30cm / 1ft standard
         const STABLE_THRESHOLD = 5; // Degrees of tolerance
         const STABLE_DURATION = 1000; // ms to hold steady
     
@@ -439,8 +439,6 @@
                 - Calculate the approximate VOLUME in cm³ or ml.
                 - Estimate the DENSITY of this specific food.
                 - Calculate the WEIGHT (Volume * Density).
-                - If you think it's a glass or a bowl and you predicted the liquid inside predict the volume based on the type of liquid as you can fetch the density.
-                - If you think it's solids then predict the approximate grams present in that volume.
     
                 OUTPUT:
                 Return a JSON object with:
