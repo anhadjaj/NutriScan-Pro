@@ -273,6 +273,9 @@
                             <div class="flex justify-between">
                                 <span>Distances:</span> <span id="debug-dist" class="text-blue-400">--</span>
                             </div>
+                             <div class="flex justify-between">
+                                <span>Dims (LxWxH):</span> <span id="debug-dims" class="text-yellow-400">--</span>
+                            </div>
                             <div class="flex justify-between">
                                 <span>Est. Vol/Wt:</span> <span id="debug-vol" class="text-purple-400">--</span>
                             </div>
@@ -543,6 +546,7 @@
         function start3DScan() {
             scanState = 'TOP_VIEW';
             images = { top: null, side: null };
+            distances = { top: 30, side: 30 }; // RESET DISTANCES FOR NEW SCAN
             levelOverlay.classList.remove('hidden');
             scanBtn.disabled = true;
             resultCard.classList.add('hidden');
@@ -744,6 +748,13 @@
             document.getElementById('debug-type').textContent = data.type;
             document.getElementById('debug-dist').textContent = `${distances.top}/${distances.side}cm`;
             document.getElementById('debug-vol').textContent = `${startWeight}${data.volume_unit}`;
+            
+            // SHOW DIMENSIONS
+            if (data.dimensions) {
+                document.getElementById('debug-dims').textContent = `${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H} cm`;
+            } else {
+                document.getElementById('debug-dims').textContent = "N/A";
+            }
             
             // Calculate Totals based on detected weight
             const ratio = startWeight / 100;
