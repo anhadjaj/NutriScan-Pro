@@ -81,9 +81,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-
         /* --- Leveler UI --- */
         #level-overlay {
             position: absolute;
@@ -130,6 +127,13 @@
             border-radius: 8px;
             font-size: 0.8rem;
         }
+        
+        /* Button Selection State */
+        .dist-btn.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen p-4 sm:p-6 lg:p-8">
@@ -142,6 +146,18 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="flex flex-col gap-6">
+                <div class="bg-black bg-opacity-40 p-1 rounded-lg flex justify-between gap-1">
+                    <button class="dist-btn flex-1 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-all" data-dist="15">
+                        <i class="fas fa-compress-arrows-alt block mb-1"></i>Close (15cm)
+                    </button>
+                    <button class="dist-btn active flex-1 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-all" data-dist="30">
+                        <i class="fas fa-arrows-alt-h block mb-1"></i>Normal (30cm)
+                    </button>
+                    <button class="dist-btn flex-1 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition-all" data-dist="60">
+                        <i class="fas fa-expand-arrows-alt block mb-1"></i>Far (60cm)
+                    </button>
+                </div>
+
                 <div class="info-card aspect-video flex items-center justify-center overflow-hidden relative">
                     <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
                     
@@ -166,10 +182,7 @@
                         <i class="fas fa-compass"></i>
                     </button>
                 </div>
-                <div class="text-center text-xs text-gray-400">
-                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 100cm from food.
-                </div>
-
+                
                 <div id="result-card" class="info-card p-5 hidden">
                     <div id="loader" class="flex justify-center items-center h-24 hidden">
                         <div class="loader"></div>
@@ -234,12 +247,10 @@
     <canvas id="capture-canvas" class="hidden"></canvas>
 
     <script type="module">
-        // Firebase Imports
         import { initializeApp as initializeFirebaseApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, writeBatch, query, where, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     
-        // --- CONFIGURATION ---
         const userFirebaseConfig = {
           apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
           authDomain: "nutriscanpro-82216.firebaseapp.com",
@@ -250,13 +261,17 @@
           measurementId: "G-98QEXEX89S"
         };
     
-        // !!! IMPORTANT: PASTE YOUR NEW KEY HERE !!!
+        // !!! API KEY !!!
         const GEMINI_API_KEY = "AIzaSyDTyTYwHZbF3P_psG2NW8t2Fj1GyJmBdhQ";
         
-        // --- CONSTANTS FOR GEOMETRY ---
-        const ESTIMATED_DISTANCE_CM = 30; // 30cm / 1ft standard
-        const STABLE_THRESHOLD = 5; // Degrees of tolerance
-        const STABLE_DURATION = 1000; // ms to hold steady
+        // --- CONSTANTS ---
+        // NEW: We use a variable for distance, not a constant
+        let currentDistanceCm = 30; 
+        
+        // NEW: Comfortable Side View Angle (65 degrees instead of 90)
+        const TARGET_SIDE_ANGLE = 65; 
+        const STABLE_THRESHOLD = 8; // Slightly looser threshold for ease
+        const STABLE_DURATION = 800; // Faster capture
     
         // DOM Elements
         const videoElement = document.getElementById('webcam');
@@ -268,8 +283,6 @@
         const resultContent = document.getElementById('result-content');
         const logContainer = document.getElementById('log-container');
         const captureCanvas = document.getElementById('capture-canvas');
-        
-        // Leveler DOM
         const levelOverlay = document.getElementById('level-overlay');
         const bubble = document.getElementById('bubble');
         const instructionText = document.getElementById('instruction-text');
@@ -278,28 +291,42 @@
     
         // State
         let db, auth, userId;
-        let scanState = 'IDLE'; // IDLE, TOP_VIEW, SIDE_VIEW, PROCESSING
+        let scanState = 'IDLE'; 
         let images = { top: null, side: null };
         let stabilityTimer = null;
         let isStable = false;
         let currentScanResult = null;
         let localDailyLog = [];
-        let firebaseEnabled = false;
     
         // --- APP START ---
         async function initializeNutriScanApp() {
             await startCamera();
             setupFirebase();
             
-            // Check for sensor permissions (iOS requires button click)
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 sensorBtn.classList.remove('hidden');
             } else {
                 window.addEventListener('deviceorientation', handleOrientation);
             }
+            setupDistanceButtons();
+        }
+
+        // --- NEW: Distance Selector Logic ---
+        function setupDistanceButtons() {
+            const buttons = document.querySelectorAll('.dist-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Update UI
+                    buttons.forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    
+                    // Update Logic
+                    currentDistanceCm = parseInt(e.currentTarget.dataset.dist);
+                    console.log(`Distance set to ${currentDistanceCm}cm`);
+                });
+            });
         }
     
-        // --- CAMERA & SENSORS ---
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -327,7 +354,6 @@
             }
         }
     
-        // --- 3D SCAN LOGIC (THE GEOMETRY PART) ---
         function start3DScan() {
             scanState = 'TOP_VIEW';
             images = { top: null, side: null };
@@ -337,31 +363,38 @@
             updateGuidance();
         }
     
+        // --- UPDATED ORIENTATION LOGIC ---
         function handleOrientation(event) {
             if (scanState === 'IDLE' || scanState === 'PROCESSING') return;
     
-            const beta = event.beta; // Front/Back tilt (-180 to 180)
-            const gamma = event.gamma; // Left/Right tilt (-90 to 90)
+            const beta = event.beta; // Front/Back tilt
+            const gamma = event.gamma; // Left/Right tilt
     
-            // Simple bubble visual
+            // Visual Bubble Logic (Simplified mapping)
             const maxTilt = 20; 
             const xOffset = Math.max(-100, Math.min(100, (gamma / maxTilt) * 100));
-            const yOffset = Math.max(-100, Math.min(100, (beta / maxTilt) * 100));
             
-            // Calculate deviation
+            // Calculate deviation based on state
             let deviation = 0;
+            let yOffset = 0;
+
             if (scanState === 'TOP_VIEW') {
+                // Target: 0 (Flat)
                 deviation = Math.sqrt(beta*beta + gamma*gamma);
-                bubble.style.transform = `translate(${gamma * 3}px, ${beta * 3}px)`;
+                yOffset = Math.max(-100, Math.min(100, (beta / maxTilt) * 100));
             } else {
-                // For side view, we care mostly about holding it upright (beta ~ 90)
-                const betaDiff = Math.abs(beta - 90);
-                deviation = Math.sqrt(betaDiff*betaDiff + gamma*gamma);
-                // Visual adjustment for upright mode
-                bubble.style.transform = `translate(${gamma * 3}px, ${(beta - 90) * 3}px)`;
+                // Target: ~65 degrees (Comfortable Angle)
+                // If beta is 65, deviation is 0.
+                const betaDiff = beta - TARGET_SIDE_ANGLE; 
+                deviation = Math.sqrt((betaDiff*betaDiff) + (gamma*gamma));
+                yOffset = Math.max(-100, Math.min(100, (betaDiff / maxTilt) * 100));
             }
+
+            // Move Bubble
+            bubble.style.transform = `translate(${xOffset * 3}px, ${yOffset * 3}px)`;
     
-            if (deviation < STABLE_THRESHOLD) {
+            // Stability Check
+            if (Math.abs(deviation) < STABLE_THRESHOLD) {
                 if (!isStable) {
                     isStable = true;
                     bubble.classList.add('aligned');
@@ -382,7 +415,6 @@
         }
     
         function captureImage() {
-            // Flash effect
             videoElement.style.opacity = "0.5";
             setTimeout(() => videoElement.style.opacity = "1", 100);
     
@@ -410,57 +442,57 @@
                 instructionText.textContent = "Hold phone FLAT above food (Top View)";
                 instructionIcon.className = "fas fa-arrow-down text-2xl mb-1 block";
             } else {
-                instructionText.textContent = "Hold phone UPRIGHT (Side View)";
-                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block";
+                // NEW INSTRUCTION TEXT
+                instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~65°)";
+                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-45"; // Rotate icon visually
             }
             isStable = false;
             bubble.classList.remove('aligned');
         }
     
-        // --- GEMINI PROCESSING ---
+        // --- GEMINI PROCESSING (UPDATED PROMPT) ---
         async function processScan() {
-            scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analyzing Geometry...`;
+            scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analyzing...`;
             resultCard.classList.remove('hidden');
             loader.classList.remove('hidden');
             resultContent.classList.add('hidden');
     
             try {
+                // NEW PROMPT HANDLING DYNAMIC DISTANCE AND ANGLE
                 const promptText = `
                 You are an expert nutritionist and geometry analyst. 
                 I have provided TWO images of the same food item:
-                1. TOP VIEW (looking down).
-                2. SIDE VIEW (looking from the side).
+                1. TOP VIEW (looking straight down).
+                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees, NOT a perfect side profile).
     
                 GEOMETRIC CONTEXT:
-                - The camera distance is approximately ${ESTIMATED_DISTANCE_CM} cm from the object in both photos.
-                - Use this distance 'd' to estimate the real-world scale (pixels to cm ratio).
-                - Identify the shape and approximate it if not standard (sphere, cylinder, cuboid, irregular).
-                - Estimate the dimensions (Length, Width, Height) in cm.
-                - Calculate the approximate VOLUME in cm³ or ml.
-                - Estimate the DENSITY of this specific food.
-                - Calculate the WEIGHT (Volume * Density).
-                - If you think it's a glass or a bowl and you predicted the liquid inside predict the volume based on the type of liquid as you can fetch the density.
-                - If you think it's solids then predict the approximate grams present in that volume.
-                - Also look at the amount of liquid or solid in the container/glass to predict the actual eatable or drinkable in the container/glass and not the dimension of the object.
+                - The camera distance was selected by the user as: ${currentDistanceCm} cm. Use this for scale.
+                - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt), so vertical lines will foreshorten.
+                
+                TASKS:
+                - Identify the shape (sphere, cylinder, cuboid, irregular).
+                - Estimate dimensions (L, W, H) in cm using the ${currentDistanceCm}cm distance as a reference.
+                - Calculate VOLUME in cm³.
+                - Estimate DENSITY (g/cm³) based on food type.
+                - Calculate WEIGHT (Volume * Density).
+                - If it's a container (glass/bowl), detect the fill level to estimate actual content volume.
     
-                OUTPUT:
-                Return a JSON object with:
+                OUTPUT JSON:
                 {
-                    "food_name": "String (Brand/Type)",
+                    "food_name": "String",
                     "shape": "String",
                     "dimensions": { "L": number, "W": number, "H": number },
                     "volume_cm3": number,
                     "density_g_cm3": number,
                     "calculated_weight_g": number,
-                    "calories": number (total for this weight),
+                    "calories": number,
                     "protein": number,
                     "carbs": number,
                     "fats": number,
                     "added_sugar": number,
                     "recommendation": "Yes/No",
-                    "reason": "Short reason"
+                    "reason": "String"
                 }
-                If unsure, estimate conservatively.
                 `;
     
                 const payload = {
@@ -474,14 +506,12 @@
                     generationConfig: { responseMimeType: "application/json" }
                 };
     
-                // *** UPDATED TO USE YOUR CONFIRMED WORKING MODEL ***
+                // Using 2.5-flash as confirmed
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
     
-                if (!response.ok) {
-                     throw new Error(`API Error: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
     
                 const data = await response.json();
                 const result = JSON.parse(data.candidates[0].content.parts[0].text);
@@ -504,16 +534,13 @@
             currentScanResult = data;
     
             document.getElementById('food-name').textContent = data.food_name;
-            document.getElementById('calc-method').textContent = `Volumetric Analysis: ~${data.volume_cm3}cm³ @ ${data.dimensions.H}cm height`;
+            document.getElementById('calc-method').textContent = `Volumetric: ~${data.volume_cm3}cm³ @ ${data.dimensions.H}cm height`;
             
-            // Print Geometry to Console as requested
             console.group("NutriScan 3D Geometry Log");
-            console.log(`Distance (d): ${ESTIMATED_DISTANCE_CM} cm`);
+            console.log(`User Distance: ${currentDistanceCm} cm`);
             console.log(`Shape: ${data.shape}`);
-            console.log(`Dimensions: L=${data.dimensions.L}cm, W=${data.dimensions.W}cm, H=${data.dimensions.H}cm`);
-            console.log(`Calculated Volume: ${data.volume_cm3} cm³`);
-            console.log(`Est. Density: ${data.density_g_cm3} g/cm³`);
-            console.log(`Final Weight: ${data.calculated_weight_g} g`);
+            console.log(`Dim: ${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H}`);
+            console.log(`Weight: ${data.calculated_weight_g} g`);
             console.groupEnd();
             
             document.getElementById('geo-data').textContent = `${data.shape} (${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H}cm) -> ${data.calculated_weight_g}g`;
@@ -539,7 +566,7 @@
             document.getElementById('recommendation-reason').textContent = data.reason;
         }
     
-        // --- LOGGING FUNCTIONS ---
+        // --- LOGGING ---
         async function addToLog() {
             if (!currentScanResult) return;
             const entry = {
@@ -580,19 +607,16 @@
                 totals.cal += item.calories;
                 totals.pro += item.protein;
                 totals.carb += item.carbs;
-                
                 const div = document.createElement('div');
                 div.className = "flex justify-between items-center border-b border-gray-700 py-2 text-sm";
                 div.innerHTML = `<span>${item.name} (${Math.round(item.quantity)}g)</span><span>${item.calories} kcal</span>`;
                 logContainer.appendChild(div);
             });
-    
             document.getElementById('total-calories').textContent = Math.round(totals.cal);
             document.getElementById('total-protein').textContent = Math.round(totals.pro) + " g";
             document.getElementById('total-carbs').textContent = Math.round(totals.carb) + " g";
         }
     
-        // --- SETUP ---
         function setupFirebase() {
             try {
                 const app = initializeFirebaseApp(userFirebaseConfig);
@@ -602,19 +626,16 @@
                     if(u) {
                         userId = u.uid;
                         document.getElementById('user-id-display').textContent = "ID: " + u.uid.substring(0,6);
-                        // Listener logic would go here
                     }
                 });
                 signInAnonymously(auth);
-            } catch(e) { console.log("Local Mode (Firebase config invalid or offline)"); }
+            } catch(e) { console.log("Local Mode"); }
         }
     
-        // --- EVENT LISTENERS ---
         scanBtn.addEventListener('click', start3DScan);
         sensorBtn.addEventListener('click', requestSensorPermission);
         addBtn.addEventListener('click', addToLog);
         
-        // Initialize
         initializeNutriScanApp();
     
     </script>
