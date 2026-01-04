@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NutriScan Pro - AR 3D Volumetric</title>
+    <title>NutriScan Pro - Hybrid 3D</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -292,7 +292,7 @@
         
         // --- CONSTANTS ---
         let currentDistanceCm = 30; // Default fallback
-        const TARGET_SIDE_ANGLE = 80; // UPDATED to 80 degrees
+        const TARGET_SIDE_ANGLE = 65; 
         const STABLE_THRESHOLD = 8; 
         const STABLE_DURATION = 800; 
     
@@ -324,7 +324,6 @@
         let db, auth, userId;
         let scanState = 'IDLE'; 
         let images = { top: null, side: null };
-        let distances = { top: 30, side: 30 }; // NEW: Separate distances
         let stabilityTimer = null;
         let isStable = false;
         let currentScanResult = null;
@@ -363,7 +362,7 @@
                     
                     // Note: If AR was running, we assume user overrides it
                     if (xrSession) {
-                        endARSession(); 
+                        endARSession(); // Helper to cleanly exit AR if they click manual
                     }
                 });
             });
@@ -546,18 +545,10 @@
     
             if (scanState === 'TOP_VIEW') {
                 images.top = base64;
-                distances.top = currentDistanceCm; // SAVE TOP DISTANCE
                 scanState = 'SIDE_VIEW';
                 updateGuidance();
             } else if (scanState === 'SIDE_VIEW') {
                 images.side = base64;
-                distances.side = currentDistanceCm; // SAVE SIDE DISTANCE
-                
-                // *** FIX: FORCE AR TO CLOSE NOW TO ENABLE SCROLLING ***
-                if (xrSession) {
-                    endARSession();
-                }
-
                 scanState = 'PROCESSING';
                 levelOverlay.classList.add('hidden');
                 processScan();
@@ -570,8 +561,8 @@
                 instructionText.textContent = "Hold phone FLAT above food (Top View)";
                 instructionIcon.className = "fas fa-arrow-down text-2xl mb-1 block";
             } else {
-                instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~80°)"; // Updated Text
-                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-12"; 
+                instructionText.textContent = "Hold phone at COMFORTABLE ANGLE (~65°)";
+                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block transform -rotate-45"; 
             }
             isStable = false;
             bubble.classList.remove('aligned');
@@ -585,15 +576,14 @@
             resultContent.classList.add('hidden');
     
             try {
-                // NEW PROMPT: PASSES BOTH DISTANCES TO THE AI
                 const promptText = `
                 You are an expert nutritionist and geometry analyst. 
                 I have provided TWO images of the same food item:
-                1. TOP VIEW (looking straight down). Distance: ${distances.top} cm.
-                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees). Distance: ${distances.side} cm.
+                1. TOP VIEW (looking straight down).
+                2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees).
     
                 GEOMETRIC CONTEXT:
-                - Use the specific distance for each view to estimate scale accurately.
+                - The camera distance was ${xrSession ? 'detected by AR' : 'selected manually'} as: ${currentDistanceCm} cm.
                 - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt).
                 
                 TASKS:
@@ -664,7 +654,7 @@
             document.getElementById('calc-method').textContent = `Volumetric: ~${data.volume_cm3}cm³ @ ${data.dimensions.H}cm height`;
             
             console.group("NutriScan 3D Geometry Log");
-            console.log(`Distances: Top=${distances.top}cm, Side=${distances.side}cm`);
+            console.log(`User Distance: ${currentDistanceCm} cm`);
             console.log(`Weight: ${data.calculated_weight_g} g`);
             console.groupEnd();
             
