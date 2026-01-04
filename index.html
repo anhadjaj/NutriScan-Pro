@@ -585,49 +585,41 @@
             resultContent.classList.add('hidden');
     
             try {
+                // NEW PROMPT: PASSES BOTH DISTANCES TO THE AI
                 const promptText = `
                 You are an expert nutritionist and geometry analyst. 
                 I have provided TWO images of the same food item:
                 1. TOP VIEW (looking straight down). Distance: ${distances.top} cm.
                 2. ANGLED SIDE VIEW (Taken at approx ${TARGET_SIDE_ANGLE} degrees). Distance: ${distances.side} cm.
-
+    
                 GEOMETRIC CONTEXT:
                 - Use the specific distance for each view to estimate scale accurately.
                 - Note: The side view is "Perspective" (approx ${TARGET_SIDE_ANGLE}° tilt).
                 
                 TASKS:
-                1. IDENTIFY CONTENT TYPE: Is it a Liquid (water, juice, soup, coffee) or a Solid food?
-                
-                2. IF LIQUID:
-                   - Ignore the container's total height. Detect the **fill line**.
-                   - Calculate the volume of the liquid *itself* based on the container's base area and the liquid's height.
-                   - Return 'volume_value' in **ml** and 'volume_unit' as "ml".
-                   - For weight, assume density approx 1.0 (water) or higher (sugary drinks/soups).
-
-                3. IF SOLID:
-                   - Identify the shape (sphere, cylinder, cuboid, irregular).
-                   - Estimate physical dimensions (L, W, H) in cm.
-                   - Calculate geometric VOLUME.
-                   - Return 'volume_value' in **cm³** and 'volume_unit' as "cm3".
-                   - Estimate DENSITY (g/cm³) based on specific food texture (e.g., bread is less dense than steak).
-                   - Calculate WEIGHT (Volume * Density).
-
+                - NOTE: if it's a solid food return in grams, if it's liquid return in ml.
+                - Identify the shape (sphere, cylinder, cuboid, irregular).
+                - Estimate dimensions (L, W, H) in cm.
+                - Calculate VOLUME in cm³.
+                - Estimate DENSITY (g/cm³) based on food type.
+                - Calculate WEIGHT (Volume * Density).
+                - If container (glass/bowl), detect fill level.
+    
                 OUTPUT JSON:
                 {
                     "food_name": "String",
                     "shape": "String",
-                    "volume_value": number,
-                    "volume_unit": "ml" or "cm3", 
-                    "calculated_weight_g": number,
+                    "dimensions": { "L": number, "W": number, "H": number },
+                    "volume_cm3": number,
                     "density_g_cm3": number,
+                    "calculated_weight_g": number,
                     "calories": number,
                     "protein": number,
                     "carbs": number,
                     "fats": number,
                     "added_sugar": number,
                     "recommendation": "Yes/No",
-                    "reason": "String",
-                    "dimensions": { "L": number, "W": number, "H": number }
+                    "reason": "String"
                 }
                 `;
     
@@ -768,41 +760,31 @@
         }
     
         function updateLogUI(logData) {
-        logContainer.innerHTML = '';
-        let totals = { cal: 0, pro: 0, carb: 0 };
-        
-        if(logData.length === 0) {
-            document.getElementById('empty-log-msg').classList.remove('hidden');
-            document.getElementById('total-calories').textContent = "0";
-            document.getElementById('total-protein').textContent = "0 g";
-            document.getElementById('total-carbs').textContent = "0 g";
-            return;
+            logContainer.innerHTML = '';
+            let totals = { cal: 0, pro: 0, carb: 0 };
+            
+            if(logData.length === 0) {
+                document.getElementById('empty-log-msg').classList.remove('hidden');
+                document.getElementById('total-calories').textContent = "0";
+                document.getElementById('total-protein').textContent = "0 g";
+                document.getElementById('total-carbs').textContent = "0 g";
+                return;
+            }
+            document.getElementById('empty-log-msg').classList.add('hidden');
+    
+            logData.forEach(item => {
+                totals.cal += item.calories;
+                totals.pro += item.protein;
+                totals.carb += item.carbs;
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center border-b border-gray-700 py-2 text-sm";
+                div.innerHTML = `<span>${item.name} (${Math.round(item.quantity)}g)</span><span>${item.calories} kcal</span>`;
+                logContainer.appendChild(div);
+            });
+            document.getElementById('total-calories').textContent = Math.round(totals.cal);
+            document.getElementById('total-protein').textContent = Math.round(totals.pro) + " g";
+            document.getElementById('total-carbs').textContent = Math.round(totals.carb) + " g";
         }
-        document.getElementById('empty-log-msg').classList.add('hidden');
-
-        logData.forEach(item => {
-            totals.cal += item.calories;
-            totals.pro += item.protein;
-            totals.carb += item.carbs;
-            
-            const div = document.createElement('div');
-            div.className = "flex justify-between items-center border-b border-gray-700 py-2 text-sm";
-            
-            // *** NEW LOGIC HERE ***
-            // Checks if it's liquid (ml) or solid (g)
-            // Note: We use 'item.volume' for liquids if it exists, otherwise fallback to quantity
-            const val = item.volume_unit === 'ml' ? item.volume : item.quantity;
-            const unit = item.volume_unit === 'ml' ? 'ml' : 'g';
-            const qtyDisplay = `${Math.round(val || 0)}${unit}`; 
-
-            div.innerHTML = `<span>${item.name} (${qtyDisplay})</span><span>${item.calories} kcal</span>`;
-            logContainer.appendChild(div);
-        });
-        
-        document.getElementById('total-calories').textContent = Math.round(totals.cal);
-        document.getElementById('total-protein').textContent = Math.round(totals.pro) + " g";
-        document.getElementById('total-carbs').textContent = Math.round(totals.carb) + " g";
-    }
     
         function setupFirebase() {
             try {
