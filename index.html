@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NutriScan Pro</title>
+    <title>NutriScan Pro - 3D Volumetric</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,10 +16,8 @@
             --card-bg: rgba(255, 255, 255, 0.05);
             --text-color: #e0eafc;
             --border-color: rgba(255, 255, 255, 0.2);
-            --recommend-yes-bg: rgba(16, 185, 129, 0.1);
-            --recommend-yes-text: #10B981;
-            --recommend-no-bg: rgba(239, 68, 68, 0.1);
-            --recommend-no-text: #EF4444;
+            --success-color: #10B981;
+            --danger-color: #EF4444;
         }
 
         body { 
@@ -35,6 +33,7 @@
             border: 1px solid var(--border-color);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
             border-radius: 1.5rem;
+            position: relative;
         }
 
         .styled-btn {
@@ -68,15 +67,8 @@
             border-color: var(--primary-color);
         }
         
-        .delete-btn {
-            background: transparent;
-            color: #718096;
-            transition: color 0.2s ease;
-        }
-        .delete-btn:hover {
-            color: #ef4444;
-        }
-
+        .delete-btn { background: transparent; color: #718096; transition: color 0.2s ease; }
+        .delete-btn:hover { color: #ef4444; }
 
         .loader {
             border: 4px solid rgba(255, 255, 255, 0.2);
@@ -87,38 +79,96 @@
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
         input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
+        /* --- Leveler UI --- */
+        #level-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; items-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .crosshair {
+            width: 200px; height: 200px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex; justify-content: center; items-center;
+        }
+        .bubble {
+            width: 40px; height: 40px;
+            background-color: rgba(255, 0, 0, 0.6);
+            border-radius: 50%;
+            transition: transform 0.1s ease-out, background-color 0.3s;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .bubble.aligned {
+            background-color: rgba(16, 185, 129, 0.8); /* Green */
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+        }
+        .scan-instruction {
+            position: absolute;
+            bottom: 20px; width: 100%;
+            text-align: center;
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            font-weight: bold;
+            color: white;
+        }
+        .scan-progress {
+            position: absolute;
+            top: 20px; right: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body class="flex flex-col items-center min-h-screen p-4 sm:p-6 lg:p-8">
 
     <div class="w-full max-w-7xl">
         <div class="text-center mb-6">
-            <h1 class="text-4xl lg:text-5xl font-bold text-white flex items-center justify-center"><i class="fas fa-utensils mr-4 opacity-80"></i>NutriScan Pro</h1>
-            <p class="text-gray-400 mt-2">Your AI-powered visual diet tracker.</p>
+            <h1 class="text-4xl lg:text-5xl font-bold text-white flex items-center justify-center"><i class="fas fa-cube mr-4 opacity-80"></i>NutriScan 3D</h1>
+            <p class="text-gray-400 mt-2">Volumetric AI Food Tracking</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="flex flex-col gap-6">
-                <div class="info-card aspect-video flex items-center justify-center overflow-hidden">
+                <div class="info-card aspect-video flex items-center justify-center overflow-hidden relative">
                     <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                    
+                    <div id="level-overlay" class="hidden">
+                        <div class="scan-progress"><span id="scan-step">1</span>/2</div>
+                        <div class="crosshair">
+                            <div id="bubble" class="bubble"></div>
+                        </div>
+                        <div class="scan-instruction">
+                            <i id="instruction-icon" class="fas fa-mobile-alt mb-1 block text-2xl"></i>
+                            <span id="instruction-text">Initializing...</span>
+                        </div>
+                    </div>
                 </div>
-                <button id="scan-btn" class="styled-btn w-full flex items-center justify-center gap-2">
-                    <i class="fas fa-camera"></i>
-                    <span>Scan Food</span>
-                </button>
+
+                <div class="flex gap-2">
+                    <button id="scan-btn" class="styled-btn flex-grow flex items-center justify-center gap-2">
+                        <i class="fas fa-camera"></i>
+                        <span>Start 3D Scan</span>
+                    </button>
+                    <button id="sensor-btn" class="styled-btn secondary-btn hidden" title="Enable Sensors">
+                        <i class="fas fa-compass"></i>
+                    </button>
+                </div>
+                <div class="text-center text-xs text-gray-400">
+                    <i class="fas fa-info-circle"></i> For best results, keep phone approx 30cm (1ft) from food.
+                </div>
 
                 <div id="result-card" class="info-card p-5 hidden">
                     <div id="loader" class="flex justify-center items-center h-24 hidden">
@@ -126,13 +176,14 @@
                     </div>
                     <div id="result-content">
                         <h3 class="text-xl font-bold text-white">Identified: <span id="food-name" class="text-primary-color"></span></h3>
-                        <p id="serving-size-info" class="text-xs text-gray-400 text-center -mt-1 mb-2"></p>
+                        <p id="calc-method" class="text-xs text-green-400 text-center mb-2 font-mono"></p>
+                        
                         <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-4 text-center">
                             <div><p class="text-gray-400">Calories</p><p id="calories" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Protein</p><p id="protein" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Carbs</p><p id="carbs" class="text-2xl font-bold"></p></div>
                             <div><p class="text-gray-400">Fats</p><p id="fats" class="text-2xl font-bold"></p></div>
-                            <div><p class="text-gray-400">Added Sugar</p><p id="added-sugar" class="text-2xl font-bold"></p></div>
+                            <div><p class="text-gray-400">Sugar</p><p id="added-sugar" class="text-2xl font-bold"></p></div>
                         </div>
                         
                         <div id="recommendation-section" class="mt-5 p-4 rounded-xl">
@@ -143,17 +194,8 @@
                             <p id="recommendation-reason" class="text-sm text-gray-300"></p>
                         </div>
                         
-                        <div id="quantity-piece-controls" class="flex items-center justify-center gap-4 mt-5">
-                            <label for="quantity_piece" class="font-semibold">Quantity:</label>
-                             <button id="qty-minus" class="styled-btn secondary-btn px-4 py-2 rounded-lg">-</button>
-                             <input type="number" id="quantity_piece" value="1" min="1" class="w-20 bg-transparent border border-gray-600 rounded-lg text-center font-bold text-lg">
-                             <button id="qty-plus" class="styled-btn secondary-btn px-4 py-2 rounded-lg">+</button>
-                        </div>
-
-                        <div id="quantity-gram-controls" class="flex items-center justify-center gap-4 mt-5 hidden">
-                            <label for="quantity_grams" class="font-semibold">Weight:</label>
-                             <input type="number" id="quantity_grams" value="100" min="1" class="w-24 bg-transparent border border-gray-600 rounded-lg text-center font-bold text-lg">
-                             <span class="font-semibold">grams</span>
+                        <div class="mt-4 p-3 bg-black bg-opacity-30 rounded-lg text-xs font-mono text-gray-400">
+                            <p><strong>Geometry Data:</strong> <span id="geo-data">Check Console</span></p>
                         </div>
 
                         <button id="add-btn" class="styled-btn w-full mt-5">Add to Daily Log</button>
@@ -175,31 +217,14 @@
                         <p class="text-gray-400">Total Carbs</p>
                         <p id="total-carbs" class="text-3xl font-bold">0 g</p>
                     </div>
-                    <div class="info-card p-4 text-center">
-                        <p class="text-gray-400">Total Fats</p>
-                        <p id="total-fats" class="text-3xl font-bold">0 g</p>
-                    </div>
-                     <div class="info-card p-4 text-center col-span-2 lg:col-span-1">
-                        <p class="text-gray-400">Total Added Sugar</p>
-                        <p id="total-added-sugar" class="text-3xl font-bold">0 g</p>
-                    </div>
                 </div>
                 <div class="info-card p-5 flex-grow flex flex-col">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl font-bold text-white">Today's Log</h3>
                         <div id="user-id-display" class="text-xs text-gray-500">Initializing...</div>
                     </div>
-                    <div class="hidden sm:grid grid-cols-8 gap-2 text-xs font-semibold text-gray-400 border-b border-gray-700 pb-2 mb-2">
-                        <span class="col-span-2">Food</span>
-                        <span class="text-center">Time</span>
-                        <span class="text-center">Qty</span>
-                        <span class="text-right">Calories</span>
-                        <span class="text-right">Protein</span>
-                        <span class="text-right">Added Sugar</span>
-                        <span class="text-right"></span>
-                    </div>
-                    <div id="log-container" class="flex-grow overflow-y-auto pr-2">
-                        <p id="empty-log-msg" class="text-gray-500 text-center mt-8">Your log is empty. Scan a food item to get started!</p>
+                    <div id="log-container" class="flex-grow overflow-y-auto pr-2 h-64">
+                        <p id="empty-log-msg" class="text-gray-500 text-center mt-8">Your log is empty. Start a 3D scan!</p>
                     </div>
                     <button id="reset-btn" class="styled-btn secondary-btn w-full mt-4">Reset Today's Log</button>
                 </div>
@@ -208,549 +233,387 @@
     </div>
     <canvas id="capture-canvas" class="hidden"></canvas>
 
-<script type="module">
-    // Firebase Imports
-    import { initializeApp as initializeFirebaseApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-    // --- YOUR FIREBASE AND GEMINI KEYS ---
-    const userFirebaseConfig = {
-      apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
-      authDomain: "nutriscanpro-82216.firebaseapp.com",
-      projectId: "nutriscanpro-82216",
-      storageBucket: "nutriscanpro-82216.appspot.com",
-      messagingSenderId: "637094147576",
-      appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
-      measurementId: "G-98QEXEX89S"
-    };
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp as initializeFirebaseApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, where, Timestamp, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     
-    // YOUR API KEY
-    const GEMINI_API_KEY = "AIzaSyASi1wwXIwEA11MInw7dty6QUxDa8sED8I";
-    // ------------------------------------
-
-    // DOM Elements
-    const videoElement = document.getElementById('webcam');
-    const scanBtn = document.getElementById('scan-btn');
-    const addBtn = document.getElementById('add-btn');
-    const resetBtn = document.getElementById('reset-btn');
-    const resultCard = document.getElementById('result-card');
-    const loader = document.getElementById('loader');
-    const resultContent = document.getElementById('result-content');
-    const logContainer = document.getElementById('log-container');
-    const captureCanvas = document.getElementById('capture-canvas');
-    const quantityPieceInput = document.getElementById('quantity_piece');
-    const quantityGramInput = document.getElementById('quantity_grams');
-    const qtyMinusBtn = document.getElementById('qty-minus');
-    const qtyPlusBtn = document.getElementById('qty-plus');
-    const emptyLogMsg = document.getElementById('empty-log-msg');
-    const userIdDisplay = document.getElementById('user-id-display');
-    const servingSizeInfo = document.getElementById('serving-size-info');
-    const quantityPieceControls = document.getElementById('quantity-piece-controls');
-    const quantityGramControls = document.getElementById('quantity-gram-controls');
-    const recommendationSection = document.getElementById('recommendation-section');
-
-    // State Variables
-    let currentScanResult = null;
-    let db, auth, userId;
-    let unsubscribeLog; 
-    let firebaseEnabled = false;
-    let localDailyLog = [];
-
-    // --- App Initialization ---
-    async function initializeNutriScanApp() {
-        startCamera();
-        scanBtn.disabled = true;
-        resetBtn.disabled = true;
-
-        try {
-            let firebaseConfig;
-            let isCanvasEnv = false;
-
-            if (typeof __firebase_config !== 'undefined' && __firebase_config.startsWith('{')) {
-                firebaseConfig = JSON.parse(__firebase_config);
-                firebaseEnabled = true;
-                isCanvasEnv = true;
-            } else if (userFirebaseConfig && userFirebaseConfig.apiKey && !userFirebaseConfig.apiKey.includes("PASTE")) {
-                firebaseConfig = userFirebaseConfig;
-                firebaseEnabled = true;
-            } else {
-                throw new Error("Firebase config not provided. Running in local mode.");
-            }
-
-            const app = initializeFirebaseApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    userIdDisplay.textContent = `User ID: ${userId.substring(0, 8)}...`;
-                    scanBtn.disabled = false;
-                    resetBtn.disabled = false;
-                    listenToLog();
-                } else {
-                    if (unsubscribeLog) unsubscribeLog();
-                    userIdDisplay.textContent = "Not Signed In";
-                }
-            });
-            
-            if (isCanvasEnv && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                 await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                 await signInAnonymously(auth);
-            }
-
-
-        } catch (e) {
-            console.warn(e.message);
-            userIdDisplay.textContent = "Local Mode (Using Browser Storage)";
-            scanBtn.disabled = false;
-            resetBtn.disabled = false;
-            loadLocalLog();
-        }
-    }
-
-    // --- Gemini API Call ---
-    async function getFoodDataFromImage(base64Image) {
-    const apiKey = GEMINI_API_KEY;
-
-    const fallbackResponse = {
-        food_name: "Error",
-        quantity_estimation: 1,
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fats: 0,
-        added_sugar: 0,
-        serving_unit: "N/A",
-        recommendation: "No",
-        reason: "Could not analyze the food item."
-    };
-
-    if (!apiKey) return fallbackResponse;
-
-    // ✅ CORRECT endpoint + model
-    const apiUrl =
-        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const payload = {
-        contents: [{
-            parts: [
-                {
-                    text: `
-            Identify the food item in the image.
-            Return JSON only with:
-            food_name,
-            quantity_estimation,
-            calories,
-            protein,
-            carbs,
-            fats,
-            added_sugar,
-            serving_unit ("per piece" or "per 100g"),
-            recommendation ("Yes" or "No"),
-            reason (short explanation)
-            `
-                            },
-                            {
-                                inlineData: {
-                                    mimeType: "image/jpeg",
-                                    data: base64Image
-                                }
-                            }
-                        ]
-                    }]
-                };
-            
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload)
-                    });
-            
-                    if (!response.ok) {
-                        throw new Error(`Gemini failed: ${response.status}`);
-                    }
-            
-                    const result = await response.json();
-            
-                    const text =
-                        result.candidates?.[0]?.content?.parts?.[0]?.text;
-            
-                    if (!text) throw new Error("Empty Gemini response");
-            
-                    return JSON.parse(text.replace(/```json|```/g, "").trim());
-            
-                } catch (err) {
-                    console.error("Gemini API Error:", err);
-                    return fallbackResponse;
-                }
-            }
-
-
-    // --- Core Functions ---
-    async function startCamera() {
-        const videoConstraints = {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'environment'
+        // --- CONFIGURATION ---
+        const userFirebaseConfig = {
+          apiKey: "AIzaSyAXevkelXF3QUko9S79Mix3lpK5J9RXnls",
+          authDomain: "nutriscanpro-82216.firebaseapp.com",
+          projectId: "nutriscanpro-82216",
+          storageBucket: "nutriscanpro-82216.appspot.com",
+          messagingSenderId: "637094147576",
+          appId: "1:637094147576:web:ecb5cd5b7d3abe7544d20d",
+          measurementId: "G-98QEXEX89S"
         };
-        try {
-            let stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-            videoElement.srcObject = stream;
-        } catch (error) {
-            console.warn("Could not get back camera, trying front camera.", error);
-            try {
-                let stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                videoElement.srcObject = stream;
-            } catch (fallbackError) {
-                console.error("Error accessing any webcam:", fallbackError);
-                 showModal("Camera Error", "Could not access any camera. Please ensure you have given permission in your browser settings.");
+    
+        // !!! IMPORTANT: PASTE YOUR NEW KEY HERE !!!
+        const GEMINI_API_KEY = "AIzaSyDTyTYwHZbF3P_psG2NW8t2Fj1GyJmBdhQ";
+        
+        // --- CONSTANTS FOR GEOMETRY ---
+        const ESTIMATED_DISTANCE_CM = 30; // 30cm / 1ft standard
+        const STABLE_THRESHOLD = 5; // Degrees of tolerance
+        const STABLE_DURATION = 1000; // ms to hold steady
+    
+        // DOM Elements
+        const videoElement = document.getElementById('webcam');
+        const scanBtn = document.getElementById('scan-btn');
+        const sensorBtn = document.getElementById('sensor-btn');
+        const addBtn = document.getElementById('add-btn');
+        const resultCard = document.getElementById('result-card');
+        const loader = document.getElementById('loader');
+        const resultContent = document.getElementById('result-content');
+        const logContainer = document.getElementById('log-container');
+        const captureCanvas = document.getElementById('capture-canvas');
+        
+        // Leveler DOM
+        const levelOverlay = document.getElementById('level-overlay');
+        const bubble = document.getElementById('bubble');
+        const instructionText = document.getElementById('instruction-text');
+        const instructionIcon = document.getElementById('instruction-icon');
+        const scanStepDisplay = document.getElementById('scan-step');
+    
+        // State
+        let db, auth, userId;
+        let scanState = 'IDLE'; // IDLE, TOP_VIEW, SIDE_VIEW, PROCESSING
+        let images = { top: null, side: null };
+        let stabilityTimer = null;
+        let isStable = false;
+        let currentScanResult = null;
+        let localDailyLog = [];
+        let firebaseEnabled = false;
+    
+        // --- APP START ---
+        async function initializeNutriScanApp() {
+            await startCamera();
+            setupFirebase();
+            
+            // Check for sensor permissions (iOS requires button click)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                sensorBtn.classList.remove('hidden');
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
             }
         }
-    }
     
-    async function scanFood() {
-        scanBtn.disabled = true;
-        scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>Scanning...</span>`;
-        resultCard.classList.remove('hidden');
-        loader.classList.remove('hidden');
-        resultContent.classList.add('hidden');
-
-        try {
+        // --- CAMERA & SENSORS ---
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+                videoElement.srcObject = stream;
+            } catch (e) {
+                console.warn("Back camera failed, trying front", e);
+                try {
+                    videoElement.srcObject = await navigator.mediaDevices.getUserMedia({ video: true });
+                } catch (err) { alert("Camera access denied."); }
+            }
+        }
+    
+        function requestSensorPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            sensorBtn.classList.add('hidden');
+                        }
+                    })
+                    .catch(console.error);
+            }
+        }
+    
+        // --- 3D SCAN LOGIC (THE GEOMETRY PART) ---
+        function start3DScan() {
+            scanState = 'TOP_VIEW';
+            images = { top: null, side: null };
+            levelOverlay.classList.remove('hidden');
+            scanBtn.disabled = true;
+            resultCard.classList.add('hidden');
+            updateGuidance();
+        }
+    
+        function handleOrientation(event) {
+            if (scanState === 'IDLE' || scanState === 'PROCESSING') return;
+    
+            const beta = event.beta; // Front/Back tilt (-180 to 180)
+            const gamma = event.gamma; // Left/Right tilt (-90 to 90)
+    
+            // Simple bubble visual
+            const maxTilt = 20; 
+            const xOffset = Math.max(-100, Math.min(100, (gamma / maxTilt) * 100));
+            const yOffset = Math.max(-100, Math.min(100, (beta / maxTilt) * 100));
+            
+            // Calculate deviation
+            let deviation = 0;
+            if (scanState === 'TOP_VIEW') {
+                deviation = Math.sqrt(beta*beta + gamma*gamma);
+                bubble.style.transform = `translate(${gamma * 3}px, ${beta * 3}px)`;
+            } else {
+                // For side view, we care mostly about holding it upright (beta ~ 90)
+                const betaDiff = Math.abs(beta - 90);
+                deviation = Math.sqrt(betaDiff*betaDiff + gamma*gamma);
+                // Visual adjustment for upright mode
+                bubble.style.transform = `translate(${gamma * 3}px, ${(beta - 90) * 3}px)`;
+            }
+    
+            if (deviation < STABLE_THRESHOLD) {
+                if (!isStable) {
+                    isStable = true;
+                    bubble.classList.add('aligned');
+                    startStabilityTimer();
+                }
+            } else {
+                isStable = false;
+                bubble.classList.remove('aligned');
+                clearTimeout(stabilityTimer);
+            }
+        }
+    
+        function startStabilityTimer() {
+            if (stabilityTimer) clearTimeout(stabilityTimer);
+            stabilityTimer = setTimeout(() => {
+                captureImage();
+            }, STABLE_DURATION);
+        }
+    
+        function captureImage() {
+            // Flash effect
+            videoElement.style.opacity = "0.5";
+            setTimeout(() => videoElement.style.opacity = "1", 100);
+    
             captureCanvas.width = videoElement.videoWidth;
             captureCanvas.height = videoElement.videoHeight;
-            const context = captureCanvas.getContext('2d');
-            context.drawImage(videoElement, 0, 0, captureCanvas.width, captureCanvas.height);
-            
-            const base64Image = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-            
-            const foodData = await getFoodDataFromImage(base64Image);
-            
-            loader.classList.add('hidden');
-
-            if (foodData && foodData.food_name !== "Unknown" && foodData.food_name !== "Error") {
-                currentScanResult = foodData;
-                document.getElementById('food-name').textContent = foodData.food_name;
-                document.getElementById('calories').textContent = (foodData.calories || 0).toFixed(0);
-                document.getElementById('protein').textContent = `${(foodData.protein || 0).toFixed(1)}g`;
-                document.getElementById('carbs').textContent = `${(foodData.carbs || 0).toFixed(1)}g`;
-                document.getElementById('fats').textContent = `${(foodData.fats || 0).toFixed(1)}g`;
-                document.getElementById('added-sugar').textContent = `${(foodData.added_sugar || 0).toFixed(1)}g`;
-                
-                const recText = document.getElementById('recommendation-text');
-                const recReason = document.getElementById('recommendation-reason');
-                const recIcon = document.getElementById('recommendation-icon');
-                
-                if (foodData.recommendation.toLowerCase() === 'yes') {
-                    recommendationSection.style.background = 'var(--recommend-yes-bg)';
-                    recText.style.color = 'var(--recommend-yes-text)';
-                    recText.textContent = 'Recommendation: Yes';
-                    recIcon.innerHTML = `<i class="fas fa-check-circle" style="color: var(--recommend-yes-text);"></i>`;
-                } else {
-                    recommendationSection.style.background = 'var(--recommend-no-bg)';
-                    recText.style.color = 'var(--recommend-no-text)';
-                    recText.textContent = 'Recommendation: No';
-                    recIcon.innerHTML = `<i class="fas fa-times-circle" style="color: var(--recommend-no-text);"></i>`;
-                }
-                recReason.textContent = foodData.reason;
-
-                if (foodData.serving_unit === 'per piece') {
-                    quantityPieceControls.classList.remove('hidden');
-                    quantityGramControls.classList.add('hidden');
-                    quantityPieceInput.value = foodData.quantity_estimation || 1;
-                } else {
-                    quantityGramControls.classList.remove('hidden');
-                    quantityPieceControls.classList.add('hidden');
-                    quantityGramInput.value = 100;
-                }
-                servingSizeInfo.textContent = `Nutritional values are ${foodData.serving_unit || 'per serving'}.`;
-                resultContent.classList.remove('hidden');
-            } else {
-                 document.getElementById('food-name').textContent = foodData.food_name === "Error" ? "Scan Error" : "Food not recognized";
-                document.getElementById('calories').textContent = '0';
-                document.getElementById('protein').textContent = '0g';
-                document.getElementById('carbs').textContent = '0g';
-                document.getElementById('fats').textContent = '0g';
-                document.getElementById('added-sugar').textContent = '0g';
-                recommendationSection.style.background = 'transparent';
-                document.getElementById('recommendation-text').textContent = '';
-                document.getElementById('recommendation-reason').textContent = 'Could not analyze item.';
-                document.getElementById('recommendation-icon').innerHTML = '';
-                quantityPieceControls.classList.remove('hidden');
-                quantityGramControls.classList.add('hidden');
-                quantityPieceInput.value = 1;
-                servingSizeInfo.textContent = '';
-                resultContent.classList.remove('hidden');
-                currentScanResult = null;
+            const ctx = captureCanvas.getContext('2d');
+            ctx.drawImage(videoElement, 0, 0);
+            const base64 = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    
+            if (scanState === 'TOP_VIEW') {
+                images.top = base64;
+                scanState = 'SIDE_VIEW';
+                updateGuidance();
+            } else if (scanState === 'SIDE_VIEW') {
+                images.side = base64;
+                scanState = 'PROCESSING';
+                levelOverlay.classList.add('hidden');
+                processScan();
             }
-        } catch(e) {
-            console.error("Error during scan process:", e);
-        } finally {
-            scanBtn.disabled = false;
-            scanBtn.innerHTML = `<i class="fas fa-camera"></i><span>Scan Food</span>`;
         }
-    }
-
-    // --- Universal Log Functions ---
-    async function addToLog() {
-        if (!currentScanResult) return;
-        
-        addBtn.disabled = true;
-        addBtn.textContent = "Adding...";
-        
-        try {
-            let quantity, unit, finalCalories, finalProtein, finalCarbs, finalFats, finalAddedSugar;
-            
-            const baseCalories = currentScanResult.calories || 0;
-            const baseProtein = currentScanResult.protein || 0;
-            const baseCarbs = currentScanResult.carbs || 0;
-            const baseFats = currentScanResult.fats || 0;
-            const baseAddedSugar = currentScanResult.added_sugar || 0;
-
-            if (currentScanResult.serving_unit === 'per piece') {
-                quantity = parseInt(quantityPieceInput.value);
-                unit = 'pcs';
-                if (isNaN(quantity) || quantity < 1) {
-                    showModal("Invalid Input", "Please enter a valid quantity.");
-                    throw new Error("Invalid quantity");
-                }
-                finalCalories = baseCalories * quantity;
-                finalProtein = baseProtein * quantity;
-                finalCarbs = baseCarbs * quantity;
-                finalFats = baseFats * quantity;
-                finalAddedSugar = baseAddedSugar * quantity;
-            } else { // per 100g
-                quantity = parseInt(quantityGramInput.value);
-                unit = 'g';
-                if (isNaN(quantity) || quantity < 1) {
-                    showModal("Invalid Input", "Please enter a valid weight in grams.");
-                    throw new Error("Invalid weight");
-                }
-                const ratio = quantity / 100.0;
-                finalCalories = baseCalories * ratio;
-                finalProtein = baseProtein * ratio;
-                finalCarbs = baseCarbs * ratio;
-                finalFats = baseFats * ratio;
-                finalAddedSugar = baseAddedSugar * ratio;
+    
+        function updateGuidance() {
+            scanStepDisplay.textContent = scanState === 'TOP_VIEW' ? "1" : "2";
+            if (scanState === 'TOP_VIEW') {
+                instructionText.textContent = "Hold phone FLAT above food (Top View)";
+                instructionIcon.className = "fas fa-arrow-down text-2xl mb-1 block";
+            } else {
+                instructionText.textContent = "Hold phone UPRIGHT (Side View)";
+                instructionIcon.className = "fas fa-arrow-right text-2xl mb-1 block";
             }
-
-            const logEntry = {
-                id: `local_${Date.now()}`,
+            isStable = false;
+            bubble.classList.remove('aligned');
+        }
+    
+        // --- GEMINI PROCESSING ---
+        async function processScan() {
+            scanBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Analyzing Geometry...`;
+            resultCard.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            resultContent.classList.add('hidden');
+    
+            try {
+                const promptText = `
+                You are an expert nutritionist and geometry analyst. 
+                I have provided TWO images of the same food item:
+                1. TOP VIEW (looking down).
+                2. SIDE VIEW (looking from the side).
+    
+                GEOMETRIC CONTEXT:
+                - The camera distance is approximately ${ESTIMATED_DISTANCE_CM} cm from the object in both photos.
+                - Use this distance 'd' to estimate the real-world scale (pixels to cm ratio).
+                - Identify the shape and approximate it if not standard (sphere, cylinder, cuboid, irregular).
+                - Estimate the dimensions (Length, Width, Height) in cm.
+                - Calculate the approximate VOLUME in cm³ or ml.
+                - Estimate the DENSITY of this specific food.
+                - Calculate the WEIGHT (Volume * Density).
+    
+                OUTPUT:
+                Return a JSON object with:
+                {
+                    "food_name": "String (Brand/Type)",
+                    "shape": "String",
+                    "dimensions": { "L": number, "W": number, "H": number },
+                    "volume_cm3": number,
+                    "density_g_cm3": number,
+                    "calculated_weight_g": number,
+                    "calories": number (total for this weight),
+                    "protein": number,
+                    "carbs": number,
+                    "fats": number,
+                    "added_sugar": number,
+                    "recommendation": "Yes/No",
+                    "reason": "Short reason"
+                }
+                If unsure, estimate conservatively.
+                `;
+    
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: promptText },
+                            { inlineData: { mimeType: "image/jpeg", data: images.top } },
+                            { inlineData: { mimeType: "image/jpeg", data: images.side } }
+                        ]
+                    }],
+                    generationConfig: { responseMimeType: "application/json" }
+                };
+    
+                // *** UPDATED TO USE YOUR CONFIRMED WORKING MODEL ***
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+    
+                if (!response.ok) {
+                     throw new Error(`API Error: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                const result = JSON.parse(data.candidates[0].content.parts[0].text);
+                
+                displayResults(result);
+    
+            } catch (e) {
+                console.error(e);
+                alert("Analysis failed. Please try scanning again.");
+                scanState = 'IDLE';
+            } finally {
+                scanBtn.disabled = false;
+                scanBtn.innerHTML = `<i class="fas fa-camera"></i> Start 3D Scan`;
+                loader.classList.add('hidden');
+            }
+        }
+    
+        function displayResults(data) {
+            resultContent.classList.remove('hidden');
+            currentScanResult = data;
+    
+            document.getElementById('food-name').textContent = data.food_name;
+            document.getElementById('calc-method').textContent = `Volumetric Analysis: ~${data.volume_cm3}cm³ @ ${data.dimensions.H}cm height`;
+            
+            // Print Geometry to Console as requested
+            console.group("NutriScan 3D Geometry Log");
+            console.log(`Distance (d): ${ESTIMATED_DISTANCE_CM} cm`);
+            console.log(`Shape: ${data.shape}`);
+            console.log(`Dimensions: L=${data.dimensions.L}cm, W=${data.dimensions.W}cm, H=${data.dimensions.H}cm`);
+            console.log(`Calculated Volume: ${data.volume_cm3} cm³`);
+            console.log(`Est. Density: ${data.density_g_cm3} g/cm³`);
+            console.log(`Final Weight: ${data.calculated_weight_g} g`);
+            console.groupEnd();
+            
+            document.getElementById('geo-data').textContent = `${data.shape} (${data.dimensions.L}x${data.dimensions.W}x${data.dimensions.H}cm) -> ${data.calculated_weight_g}g`;
+    
+            document.getElementById('calories').textContent = data.calories;
+            document.getElementById('protein').textContent = data.protein + "g";
+            document.getElementById('carbs').textContent = data.carbs + "g";
+            document.getElementById('fats').textContent = data.fats + "g";
+            document.getElementById('added-sugar').textContent = data.added_sugar + "g";
+    
+            const recSec = document.getElementById('recommendation-section');
+            const recText = document.getElementById('recommendation-text');
+            
+            if (data.recommendation === "Yes") {
+                recSec.style.background = 'rgba(16, 185, 129, 0.1)';
+                recText.style.color = '#10B981';
+                recText.innerHTML = '<i class="fas fa-check-circle"></i> Recommended';
+            } else {
+                recSec.style.background = 'rgba(239, 68, 68, 0.1)';
+                recText.style.color = '#EF4444';
+                recText.innerHTML = '<i class="fas fa-times-circle"></i> Limit This';
+            }
+            document.getElementById('recommendation-reason').textContent = data.reason;
+        }
+    
+        // --- LOGGING FUNCTIONS ---
+        async function addToLog() {
+            if (!currentScanResult) return;
+            const entry = {
+                id: `log_${Date.now()}`,
                 name: currentScanResult.food_name,
-                quantity: quantity,
-                unit: unit,
-                calories: finalCalories,
-                protein: finalProtein,
-                carbs: finalCarbs,
-                fats: finalFats,
-                added_sugar: finalAddedSugar,
+                quantity: currentScanResult.calculated_weight_g,
+                unit: 'g',
+                calories: currentScanResult.calories,
+                protein: currentScanResult.protein,
+                carbs: currentScanResult.carbs,
+                fats: currentScanResult.fats,
+                added_sugar: currentScanResult.added_sugar,
                 timestamp: new Date()
             };
-
-            if (firebaseEnabled && userId) {
-                await addDoc(collection(db, `users/${userId}/nutritionLog`), { ...logEntry, timestamp: serverTimestamp() });
-            } else {
-                localDailyLog.push(logEntry);
-                saveLocalLog();
-                updateLogUI(localDailyLog);
-            }
-
-            resultCard.classList.add('hidden');
-            currentScanResult = null;
-        } catch (e) {
-            console.error("Error in addToLog:", e);
-        } finally {
-            addBtn.disabled = false;
-            addBtn.textContent = "Add to Daily Log";
-        }
-    }
-    
-    async function deleteLogItem(docId) {
-        if (firebaseEnabled && userId) {
-            try {
-                await deleteDoc(doc(db, `users/${userId}/nutritionLog`, docId));
-            } catch (e) { console.error("Error deleting item:", e); }
-        } else {
-            localDailyLog = localDailyLog.filter(item => item.id !== docId);
-            saveLocalLog();
-            updateLogUI(localDailyLog);
-        }
-    }
-    
-    async function resetDay() {
-        showModal("Confirm Reset", "Are you sure you want to reset your log for today? This cannot be undone.", true, async () => {
-            if (firebaseEnabled && userId) {
-                resetBtn.disabled = true;
-                resetBtn.textContent = "Resetting...";
+            
+            if (userId) {
                 try {
-                    const startOfToday = new Date();
-                    startOfToday.setHours(0, 0, 0, 0);
-                    const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
-                    const logCollection = collection(db, `users/${userId}/nutritionLog`);
-                    const q = query(logCollection, where("timestamp", ">=", startOfTodayTimestamp));
-                    const snapshot = await getDocs(q);
-                    const batch = writeBatch(db);
-                    snapshot.forEach(doc => { batch.delete(doc.ref); });
-                    await batch.commit();
-                } catch (e) { console.error("Error resetting log: ", e);
-                } finally {
-                    resetBtn.disabled = false;
-                    resetBtn.textContent = "Reset Today's Log";
-                }
+                    await addDoc(collection(db, `users/${userId}/nutritionLog`), { ...entry, timestamp: serverTimestamp() });
+                } catch(e) { console.error("Firebase Add Error", e); }
             } else {
-                localDailyLog = [];
-                saveLocalLog();
+                localDailyLog.push(entry);
                 updateLogUI(localDailyLog);
             }
-        });
-    }
-
-    // --- Firestore-Specific Functions ---
-    function listenToLog() {
-        if (!userId || !firebaseEnabled) return;
-        if (unsubscribeLog) unsubscribeLog();
-        
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
-
-        const logCollection = collection(db, `users/${userId}/nutritionLog`);
-        const q = query(logCollection, where("timestamp", ">=", startOfTodayTimestamp));
-
-        unsubscribeLog = onSnapshot(q, (snapshot) => {
-            const dailyLog = [];
-            snapshot.forEach(doc => {
-                dailyLog.push({ id: doc.id, ...doc.data() });
-            });
-            dailyLog.sort((a, b) => a.timestamp?.seconds - b.timestamp?.seconds);
-            updateLogUI(dailyLog);
-        });
-    }
-    
-    // --- Local Storage Functions ---
-    function saveLocalLog() {
-        const today = new Date().toISOString().split('T')[0];
-        localStorage.setItem(`nutriScanLog_${today}`, JSON.stringify(localDailyLog));
-    }
-
-    function loadLocalLog() {
-        const today = new Date().toISOString().split('T')[0];
-        const savedLog = localStorage.getItem(`nutriScanLog_${today}`);
-        if (savedLog) {
-            localDailyLog = JSON.parse(savedLog);
-            updateLogUI(localDailyLog);
+            resultCard.classList.add('hidden');
         }
-    }
-
-
-    // --- UI Update Function ---
-    function updateLogUI(logData) {
-        let totalCalories = 0, totalProtein = 0, totalCarbs = 0, totalFats = 0, totalAddedSugar = 0;
-        logContainer.innerHTML = '';
-        
-        emptyLogMsg.classList.toggle('hidden', logData.length > 0);
-
-        logData.forEach(item => {
-            totalCalories += item.calories;
-            totalProtein += item.protein;
-            totalCarbs += item.carbs;
-            totalFats += item.fats;
-            totalAddedSugar += item.added_sugar || 0;
+    
+        function updateLogUI(logData) {
+            logContainer.innerHTML = '';
+            let totals = { cal: 0, pro: 0, carb: 0 };
             
-            const itemTime = item.timestamp ? new Date(item.timestamp.seconds ? item.timestamp.seconds * 1000 : item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
-            const itemUnit = item.unit || 'pcs';
-
-            const logItem = document.createElement('div');
-            logItem.className = 'grid grid-cols-4 sm:grid-cols-8 gap-2 text-sm py-2 border-b border-gray-700 items-center';
-            logItem.innerHTML = `
-                <span class="col-span-4 sm:col-span-2 font-semibold capitalize">${item.name}</span>
-                <span class="hidden sm:inline-block text-center text-gray-400">${itemTime}</span>
-                <span class="hidden sm:inline-block text-center">${item.quantity} ${itemUnit}</span>
-                <span class="hidden sm:inline-block text-right">${item.calories.toFixed(0)} kcal</span>
-                <span class="hidden sm:inline-block text-right">${item.protein.toFixed(1)} g</span>
-                <span class="hidden sm:inline-block text-right">${(item.added_sugar || 0).toFixed(1)} g</span>
-                <span class="text-right"><button data-id="${item.id}" class="delete-btn"><i class="fas fa-trash-alt"></i></button></span>
-            `;
-            logContainer.appendChild(logItem);
-        });
-
-        document.getElementById('total-calories').textContent = totalCalories.toFixed(0);
-        document.getElementById('total-protein').textContent = `${totalProtein.toFixed(1)} g`;
-        document.getElementById('total-carbs').textContent = `${totalCarbs.toFixed(1)} g`;
-        document.getElementById('total-fats').textContent = `${totalFats.toFixed(1)} g`;
-        document.getElementById('total-added-sugar').textContent = `${totalAddedSugar.toFixed(1)} g`;
-    }
-
-    // --- Custom Modal (replaces alert/confirm) ---
-    function showModal(title, message, showConfirm = false, confirmCallback = () => {}) {
-        let existingModal = document.getElementById('custom-modal');
-        if(existingModal) existingModal.remove();
-
-        const modal = document.createElement('div');
-        modal.id = 'custom-modal';
-        modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50';
-        modal.innerHTML = `
-            <div class="info-card p-6 w-full max-w-sm text-center">
-                <h3 class="text-xl font-bold mb-3">${title}</h3>
-                <p class="text-gray-300 mb-6">${message}</p>
-                <div id="modal-buttons" class="flex gap-4 justify-center">
-                    <button id="modal-ok-btn" class="styled-btn">OK</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        const okBtn = document.getElementById('modal-ok-btn');
-        const modalButtons = document.getElementById('modal-buttons');
-
-        if(showConfirm) {
-            okBtn.textContent = 'Confirm';
-            const cancelBtn = document.createElement('button');
-            cancelBtn.id = 'modal-cancel-btn';
-            cancelBtn.className = 'styled-btn secondary-btn';
-            cancelBtn.textContent = 'Cancel';
-            modalButtons.appendChild(cancelBtn);
-            
-            okBtn.addEventListener('click', () => {
-                confirmCallback();
-                modal.remove();
+            if(logData.length === 0) {
+                document.getElementById('empty-log-msg').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('empty-log-msg').classList.add('hidden');
+    
+            logData.forEach(item => {
+                totals.cal += item.calories;
+                totals.pro += item.protein;
+                totals.carb += item.carbs;
+                
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center border-b border-gray-700 py-2 text-sm";
+                div.innerHTML = `<span>${item.name} (${Math.round(item.quantity)}g)</span><span>${item.calories} kcal</span>`;
+                logContainer.appendChild(div);
             });
-            cancelBtn.addEventListener('click', () => modal.remove());
-        } else {
-             okBtn.addEventListener('click', () => modal.remove());
-        }
-    }
-
-
-    // --- Event Listeners ---
-    scanBtn.addEventListener('click', scanFood);
-    addBtn.addEventListener('click', addToLog);
-    resetBtn.addEventListener('click', resetDay);
     
-    // Use event delegation for delete buttons
-    logContainer.addEventListener('click', (event) => {
-        const deleteButton = event.target.closest('.delete-btn');
-        if (deleteButton && deleteButton.dataset.id) {
-            deleteLogItem(deleteButton.dataset.id);
+            document.getElementById('total-calories').textContent = Math.round(totals.cal);
+            document.getElementById('total-protein').textContent = Math.round(totals.pro) + " g";
+            document.getElementById('total-carbs').textContent = Math.round(totals.carb) + " g";
         }
-    });
-
-    qtyMinusBtn.addEventListener('click', () => {
-        let currentQty = parseInt(quantityPieceInput.value);
-        if (currentQty > 1) quantityPieceInput.value = currentQty - 1;
-    });
-
-    qtyPlusBtn.addEventListener('click', () => {
-        let currentQty = parseInt(quantityPieceInput.value);
-        quantityPieceInput.value = currentQty + 1;
-    });
     
-    // --- Initialize App ---
-    initializeNutriScanApp();
-
-</script>
+        // --- SETUP ---
+        function setupFirebase() {
+            try {
+                const app = initializeFirebaseApp(userFirebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, u => {
+                    if(u) {
+                        userId = u.uid;
+                        document.getElementById('user-id-display').textContent = "ID: " + u.uid.substring(0,6);
+                        // Listener logic would go here
+                    }
+                });
+                signInAnonymously(auth);
+            } catch(e) { console.log("Local Mode (Firebase config invalid or offline)"); }
+        }
+    
+        // --- EVENT LISTENERS ---
+        scanBtn.addEventListener('click', start3DScan);
+        sensorBtn.addEventListener('click', requestSensorPermission);
+        addBtn.addEventListener('click', addToLog);
+        
+        // Initialize
+        initializeNutriScanApp();
+    
+    </script>
 </body>
 </html>
